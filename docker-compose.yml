@@ -1,0 +1,189 @@
+# =============================================================================
+#  Local Search — Firecrawl + SearXNG (local web-browsing system for AI models)
+# =============================================================================
+#  This Compose file is consumed by the installers (install-local-search.bat /
+#  install-local-search.sh). The host ports and credentials are injected from
+#  the generated .env file (created at install time).
+#
+#  Services:
+#    searxng          metasearch + JSON API        -> host ${SEARXNG_PORT}
+#    firecrawl        scrape/crawl/search/map API  -> host ${FIRECRAWL_PORT}
+#    playwright-service  JS rendering for Firecrawl
+#    redis               queue for Firecrawl
+#    rabbitmq            message broker for Firecrawl
+#    nuq-postgres        job state DB for Firecrawl
+#
+#  Only the two host ports below are published. Everything else stays on the
+#  private "local-search-net" bridge network.
+# =============================================================================
+
+name: local-search
+
+services:
+
+  # --------------------------------------------------------------------------
+  # SearXNG — privacy-respecting metasearch engine, exposed as a JSON API.
+  # Powers both your AI models (direct JSON queries) and Firecrawl's /v1/search.
+  # --------------------------------------------------------------------------
+  searxng:
+    image: searxng/searxng:latest
+    container_name: local-search-searxng
+    ports:
+      - "${SEARXNG_PORT:-9990}:8080"
+    volumes:
+      - ./config/searxng:/etc/searxng:rw
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:${SEARXNG_PORT:-9990}/
+      - UWSGI_WORKERS=4
+      - UWSGI_THREADS=4
+      - SEARXNG_SECRET=${SEARXNG_SECRET}
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    networks:
+      - local-search-net
+
+  # --------------------------------------------------------------------------
+  # Firecrawl API server (the public-facing scraping/crawl/search service).
+  # --------------------------------------------------------------------------
+  firecrawl:
+    image: ghcr.io/firecrawl/firecrawl:latest
+    container_name: local-search-firecrawl
+    ports:
+      - "${FIRECRAWL_PORT:-9991}:3002"
+    environment:
+      - PORT=3002
+      - HOST=0.0.0.0
+      - ENV=local
+      - REDIS_URL=redis://redis:6379
+      - REDIS_RATE_LIMIT_URL=redis://redis:6379
+      - PLAYWRIGHT_MICROSERVICE_URL=http://playwright-service:3000/scrape
+      - USE_DB_AUTHENTICATION=false
+      - BULL_AUTH_KEY=${BULL_AUTH_KEY}
+      - LOGGING_LEVEL=${LOGGING_LEVEL:-info}
+      - BLOCK_MEDIA=false
+      - ALLOW_LOCAL_WEBHOOKS=false
+      - SEARXNG_ENDPOINT=http://searxng:8080
+      - POSTGRES_HOST=nuq-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-firecrawl}
+      - POSTGRES_USER=${POSTGRES_USER:-firecrawl}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - NUQ_RABBITMQ_URL=amqp://${RABBITMQ_USER:-firecrawl}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      # ---- Optional AI features (set in .env to enable /v1/extract + summary) ----
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
+      - MODEL_NAME=${MODEL_NAME:-}
+      - MODEL_EMBEDDING_NAME=${MODEL_EMBEDDING_NAME:-}
+    command: ["node", "dist/src/harness.js", "--start-docker"]
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
+    depends_on:
+      redis:
+        condition: service_started
+      playwright-service:
+        condition: service_started
+      searxng:
+        condition: service_started
+      nuq-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - local-search-net
+
+  # --------------------------------------------------------------------------
+  # Playwright headless browser service — does the actual JS-rendered fetching.
+  # --------------------------------------------------------------------------
+  playwright-service:
+    image: ghcr.io/firecrawl/playwright-service:latest
+    container_name: local-search-playwright
+    environment:
+      - PORT=3000
+      - BLOCK_MEDIA=false
+      - ALLOW_LOCAL_WEBHOOKS=false
+      - MAX_CONCURRENT_PAGES=10
+    restart: unless-stopped
+    networks:
+      - local-search-net
+
+  # --------------------------------------------------------------------------
+  # Redis — Firecrawl queue / rate-limiting store.
+  # --------------------------------------------------------------------------
+  redis:
+    image: redis:alpine
+    container_name: local-search-redis
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - local-search-net
+
+  # --------------------------------------------------------------------------
+  # RabbitMQ — message broker used by Firecrawl's job workers.
+  # --------------------------------------------------------------------------
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: local-search-rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-firecrawl}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - local-search-net
+
+  # --------------------------------------------------------------------------
+  # nuq-postgres — Firecrawl job-state database (pg_cron enabled image).
+  # --------------------------------------------------------------------------
+  nuq-postgres:
+    image: ghcr.io/firecrawl/nuq-postgres:latest
+    container_name: local-search-postgres
+    command: postgres -c cron.database_name=${POSTGRES_DB:-firecrawl}
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-firecrawl}
+      - POSTGRES_USER=${POSTGRES_USER:-firecrawl}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-firecrawl} -d ${POSTGRES_DB:-firecrawl}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - local-search-net
+
+networks:
+  local-search-net:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:
+  rabbitmq-data:

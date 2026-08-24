@@ -1,0 +1,43 @@
+# =============================================================================
+#  SearXNG settings for local-search
+# =============================================================================
+#  Pre-configured for AI / local-model use:
+#    * search.formats includes "json"  -> lets models query the JSON API
+#    * server.limiter: false           -> no rate-limiting on API calls
+#    * server.public_instance: false   -> private instance defaults
+#    * secret_key placeholder          -> installer replaces with a random key
+#
+#  "use_default_settings: true" inherits all upstream defaults (engines,
+#  plugins, etc.) so only the overrides below take effect.
+# =============================================================================
+
+use_default_settings: true
+
+general:
+  debug: false
+  instance_name: "Local Search"
+  privacypolicy_url: false
+  contact_link: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "en"
+  formats:
+    - html
+    - json
+
+server:
+  secret_key: "32645fb30c6d4cbe217c67956d3db00d377b4fded18455497b073b3b0dc4253c"
+  bind_address: "0.0.0.0"
+  port: 8080
+  image_proxy: true
+  limiter: false
+  public_instance: false
+
+ui:
+  static_use_hash: true
+
+outgoing:
+  request_timeout: 10.0
+  max_request_timeout: 15.0
