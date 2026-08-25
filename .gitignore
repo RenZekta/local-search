@@ -1,1 +1,20 @@
+# ---- Generated at install time (contains your ports and secrets) ----
 .env
+.env.bak.*
+
+# ---- Written by the installer into installed skill copies ----
+# (the source copy in the repo must stay clean; the installer records the
+#  install path here when it copies the skill to ~/.agents/skills/local-web)
+local-web/install-dir.txt
+
+# ---- Python bytecode (skill scripts) ----
+__pycache__/
+*.pyc
+
+# ---- OS junk ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Logs ----
+*.log

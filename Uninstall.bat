@@ -26,7 +26,9 @@ echo This will:
 echo   1. Stop and remove all Local Search containers.
 echo   2. Remove the Docker VOLUMES (Firecrawl job state, redis cache,
 echo      rabbitmq/postgres data). This deletes all stored data.
-echo   3. (Optional) Delete the install folder and all its files.
+echo   3. Remove the local-web agent skill from
+echo      %USERPROFILE%\.agents\skills\local-web
+echo   4. (Optional) Delete the install folder and all its files.
 echo.
 echo   Pulled Docker images are NOT removed (use "docker image prune" to
 echo   reclaim that disk space separately).
@@ -49,6 +51,15 @@ if errorlevel 1 (
 
 echo.
 echo Containers and volumes removed.
+echo.
+echo Removing the local-web agent skill...
+set "SKILL_DIR=%USERPROFILE%\.agents\skills\local-web"
+if exist "!SKILL_DIR!" (
+  rd /s /q "!SKILL_DIR!"
+  echo   Removed !SKILL_DIR!
+) else (
+  echo   Skill not found ^(already removed^) - nothing to do.
+)
 echo.
 set "DELFILES="
 set /p DELFILES="Also delete the install folder and ALL its files? [y/N]: "

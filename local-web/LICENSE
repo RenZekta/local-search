@@ -371,20 +371,3 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
 
   This Source Code Form is "Incompatible With Secondary Licenses", as
   defined by the Mozilla Public License, v. 2.0.
-
-----------------------------------------------------------------------
-
-NOTE: This project is configuration glue plus a small agent skill
-(local-web); it bundles no upstream source code. When you run the
-installer, Docker pulls the official images of the following
-third-party projects, each governed by its own license:
-
-  - SearXNG        https://github.com/searxng/searxng        (AGPL-3.0)
-  - Firecrawl      https://github.com/firecrawl/firecrawl   (AGPL-3.0
-                  with a commercial option for the hosted service)
-  - Redis          https://redis.io                          (RSALv2/SSPL)
-  - Playwright     https://github.com/firecrawl/firecrawl
-                  playwright-service                        (AGPL-3.0)
-
-By using this installer you also accept the licenses of those
-upstream projects.

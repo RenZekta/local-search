@@ -1,0 +1,17 @@
+# Normalize text files in the repo; keep platform-native line endings on checkout
+* text=auto
+
+# Windows batch files must keep CRLF working copies
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Unix scripts must stay LF
+*.sh text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Docs
+*.md text
+LICENSE text
