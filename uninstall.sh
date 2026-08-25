@@ -6,6 +6,7 @@
 #   - optionally deletes the install folder
 set -u
 cd "$(dirname "$0")" || exit 1
+lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }  # bash-3.2 (macOS) safe
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "[ERROR] Docker is not installed. You can delete this folder manually." >&2
@@ -37,7 +38,7 @@ MSG
 echo
 printf "Continue with uninstall? [y/N]: "
 read -r CONFIRM
-if [ "${CONFIRM,,}" != "y" ]; then echo "Uninstall cancelled."; exit 0; fi
+if [ "$(lower "$CONFIRM")" != "y" ]; then echo "Uninstall cancelled."; exit 0; fi
 
 echo
 echo "Stopping and removing containers + volumes..."
@@ -57,7 +58,7 @@ fi
 echo
 printf "Also delete the install folder and ALL its files? [y/N]: "
 read -r DELFILES
-if [ "${DELFILES,,}" != "y" ]; then
+if [ "$(lower "$DELFILES")" != "y" ]; then
   echo
   echo "Uninstall finished. The folder was kept:"
   echo "  $(pwd)"
