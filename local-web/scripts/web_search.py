@@ -5,6 +5,11 @@ Usage:
     python web_search.py "your query" [--limit 8] [--time-range day|week|month]
                                   [--categories it,news,general]
 
+Self-healing: if the local-search stack is unreachable (Docker engine or the
+containers are down), this script automatically starts them (the same logic
+as ensure_stack.py / Run.bat) and retries the search once. You do NOT need
+to run ensure_stack.py first — just run the search.
+
 Prints up to `limit` results, each as:
     N. <title>
        <url>
@@ -13,6 +18,7 @@ Prints up to `limit` results, each as:
 import json
 import os
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -21,6 +27,29 @@ import config  # sibling module: install-dir lookup + .env-driven endpoints
 
 # Port comes from SEARXNG_PORT in the install folder's .env (default 9990).
 BASE = config.endpoints(config.find_install_dir())["searxng"] + "/search"
+
+TIMEOUT = 30  # seconds per HTTP attempt
+
+
+def fetch(url):
+    """GET the SearXNG JSON API. Raises HTTPError when the service answered
+    with an error status (service is UP), URLError-family on connection
+    problems (service is DOWN)."""
+    req = urllib.request.Request(url, headers={"User-Agent": "zcode-local-web/1.0"})
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+        return json.load(r)
+
+
+def selfheal():
+    """Start the Docker engine + the containers if they are down (the same
+    logic as ensure_stack.py). Import is deferred so the fast path (stack
+    already up) pays nothing. Returns (ok, message)."""
+    try:
+        import ensure_stack
+        ok, message, _code = ensure_stack.ensure_ready()
+        return ok, message
+    except Exception as e:  # unexpected self-heal failure: degrade gracefully
+        return False, "self-heal failed unexpectedly: {}".format(e)
 
 
 def main() -> int:
@@ -56,15 +85,37 @@ def main() -> int:
     if categories:
         params["categories"] = categories
     url = BASE + "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={"User-Agent": "zcode-local-web/1.0"})
+
+    data = None
     try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            data = json.load(r)
-    except Exception as e:
+        data = fetch(url)
+    except urllib.error.HTTPError as e:
+        # The service ANSWERED (even with an error status) -> it is up;
+        # starting containers would not help.
         print(f"SEARCH FAILED: {e}", file=sys.stderr)
-        print("Is the local-search stack running? Run scripts/ensure_stack.py "
-              "(it starts the Docker containers if needed), then retry.", file=sys.stderr)
+        print("SearXNG answered with an error status (the stack is running). "
+              "Retry once with a different query, or inspect the stack with: "
+              "cd <install folder> && docker compose logs --tail 50 searxng",
+              file=sys.stderr)
         return 1
+    except Exception as e:
+        # Connection error: the stack is (probably) down -> self-heal once,
+        # then retry the search.
+        print(f"Stack unreachable ({e}) — starting it automatically ...",
+              file=sys.stderr)
+        ok, message = selfheal()
+        if not ok:
+            print(message, file=sys.stderr)
+            print("SEARCH FAILED: the local-search stack could not be started. "
+                  "Resolve the stack (or ask the user to start Docker Desktop) "
+                  "and retry — do NOT fall back to other web tools unless the "
+                  "user asks.", file=sys.stderr)
+            return 1
+        try:
+            data = fetch(url)
+        except Exception as e2:
+            print(f"SEARCH FAILED after the stack was started: {e2}", file=sys.stderr)
+            return 1
 
     results = data.get("results", [])[:limit]
     if not results:

@@ -236,22 +236,28 @@ What the skill does for the agent:
   (so custom install-time ports just work) and locates the install folder via
   the compose labels on the running containers, the installer-recorded
   `install-dir.txt` hint, or `~/local-search` — no hardcoded anything.
-- **Starts the stack when it's down.** `ensure_stack.py` even boots the Docker
-  engine (Docker Desktop / `systemctl start docker`) if needed, then runs the
-  same `docker compose up -d` that `Run.bat` / `run.sh` use — and it **never
-  stops the stack** (stopping is your job, via `Stop.bat` / `stop.sh`).
+- **Self-heals a down stack — no warm-up step.** If the Docker engine or the
+  containers are down when a search/scrape runs, the script boots the engine
+  (Docker Desktop / `systemctl start docker`), runs the same `docker compose
+  up -d` that `Run.bat` / `run.sh` use, waits for the endpoints, and retries
+  the request — so the agent calls the search/scrape scripts directly, even
+  in an old conversation where the stack has since gone down
+  (`ensure_stack.py` remains available as an optional pre-flight check). The
+  stack is **never stopped** by the scripts (stopping is your job, via
+  `Stop.bat` / `stop.sh`).
 - **Searches the web.** `web_search.py "query"` prints the top results as
   `title / url / snippet`, with `--limit`, `--time-range day|week|month`, and
   `--categories it,news,general` options.
 - **Reads pages.** `web_scrape.py <url>` returns the page as clean Markdown
   (truncated at 20,000 chars; raise with `--max-chars`).
 
-Manual usage (the agent does exactly this under the hood):
+Manual usage (exactly what the agent runs — no separate start step needed):
 
 ```bash
-python ~/.agents/skills/local-web/scripts/ensure_stack.py
 python ~/.agents/skills/local-web/scripts/web_search.py "latest python release"
 python ~/.agents/skills/local-web/scripts/web_scrape.py "https://example.com"
+# optional pre-flight check / status report:
+python ~/.agents/skills/local-web/scripts/ensure_stack.py --check
 ```
 
 The full agent-facing instructions live in the skill's `SKILL.md`. Keeping the
