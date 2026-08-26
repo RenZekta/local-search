@@ -106,9 +106,15 @@ defaults you can accept by pressing **Enter**. It then generates
 cryptographically-secure credentials, writes your `.env`, **installs the
 local-web skill**, pulls the images, and starts the stack.
 
+> **Docker isn't running?** No problem — the installer starts it for you: it
+> launches Docker Desktop (Windows/macOS) or the Docker service
+> (`systemctl`/`service`, Linux) and waits up to 5 minutes for the engine while
+> you answer the prompts. (Override the wait with the
+> `LOCAL_SEARCH_DOCKER_TIMEOUT` env var, in seconds.)
+
 ### Windows
 
-1. Install & start [Docker Desktop](https://www.docker.com/products/docker-desktop/), wait until it says "running".
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) — no need to open it first; the installer launches it automatically.
 2. Double-click **`install-local-search.bat`** (or run it from a terminal).
 
 ```
@@ -130,7 +136,8 @@ chmod +x install-local-search.sh
 ```
 
 The prompts are the same. Defaults: install to `~/local-search`, SearXNG on
-`9990`, Firecrawl on `9991`.
+`9990`, Firecrawl on `9991`. A stopped Docker engine is started automatically
+(Docker Desktop on macOS, `systemctl`/`service` on Linux).
 
 > **First run downloads ~3–4 GB of Docker images** (the Playwright image bundles
 > a full Chromium). Subsequent starts are a few seconds.
@@ -583,6 +590,13 @@ skill at a different folder, set the `LOCAL_SEARCH_DIR` environment variable.
 
 ## Troubleshooting
 
+**The installer says the Docker engine "did not come online".**
+The installer launches Docker Desktop / the docker service when the engine is
+down, then waits up to 5 minutes (override with the `LOCAL_SEARCH_DOCKER_TIMEOUT`
+env var, in seconds). If it times out, start Docker yourself, wait until it
+reports "running", and re-run the installer — anything it already wrote is
+safely overwritten.
+
 **`docker compose up` fails with a port already in use.**
 Re-run the installer and pick different ports, or stop whatever's using 9990/9991.
 
@@ -669,8 +683,8 @@ then run the installer again.
 
 ## Credits & licenses
 
-This project is licensed under the **MPL-2.0** license — see [LICENSE](LICENSE).
-The bundled [local-web](local-web) skill is also MPL-2.0.
+This project is licensed under the **MPL-2.0** license — see [LICENSE](LICENSE)
+(it covers the bundled [local-web](local-web) skill too).
 
 - [**SearXNG**](https://github.com/searxng/searxng) — AGPL-3.0, privacy-respecting metasearch engine.
 - [**Firecrawl**](https://github.com/firecrawl/firecrawl) — AGPL-3.0, the context API for web scraping/crawling/search.
