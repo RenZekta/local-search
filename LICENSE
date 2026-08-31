@@ -357,7 +357,7 @@ Exhibit A - Source Code Form License Notice
 
   This Source Code Form is subject to the terms of the Mozilla Public
   License, v. 2.0. If a copy of the MPL was not distributed with this
-  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 If it is not possible or desirable to put the notice in a particular
 file, then You may include the notice in a location (such as a LICENSE
@@ -371,20 +371,3 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
 
   This Source Code Form is "Incompatible With Secondary Licenses", as
   defined by the Mozilla Public License, v. 2.0.
-
-----------------------------------------------------------------------
-
-NOTE: This project is configuration glue plus a small agent skill
-(local-web); it bundles no upstream source code. When you run the
-installer, Docker pulls the official images of the following
-third-party projects, each governed by its own license:
-
-  - SearXNG        https://github.com/searxng/searxng        (AGPL-3.0)
-  - Firecrawl      https://github.com/firecrawl/firecrawl   (AGPL-3.0
-                  with a commercial option for the hosted service)
-  - Redis          https://redis.io                          (RSALv2/SSPL)
-  - Playwright     https://github.com/firecrawl/firecrawl
-                  playwright-service                        (AGPL-3.0)
-
-By using this installer you also accept the licenses of those
-upstream projects.
