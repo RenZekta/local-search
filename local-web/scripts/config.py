@@ -9,6 +9,20 @@ SearXNG 9990, Firecrawl 9991.
 """
 import os
 import subprocess
+import sys
+
+# Default stdout/stderr to UTF-8 regardless of the host locale/codepage
+# (e.g. Windows cp1252). config.py is imported first by every entry-point
+# script, so this covers the process even if this module is ever imported
+# on its own. Skipped if PYTHONIOENCODING is already set — an explicit
+# override always wins.
+if "PYTHONIOENCODING" not in os.environ:
+    for _stream in (sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            try:
+                _stream.reconfigure(encoding="utf-8")
+            except Exception:
+                pass
 
 # Compose file names accepted as "this is the install folder".
 _COMPOSE_FILES = ("docker-compose.yml", "docker-compose.yaml",

@@ -17,6 +17,18 @@ import sys
 import urllib.error
 import urllib.request
 
+# Default stdout/stderr to UTF-8 regardless of the host locale/codepage
+# (e.g. Windows cp1252), so scraped page content with non-ASCII text never
+# crashes with a UnicodeEncodeError. Skipped if PYTHONIOENCODING is already
+# set — an explicit override always wins.
+if "PYTHONIOENCODING" not in os.environ:
+    for _stream in (sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            try:
+                _stream.reconfigure(encoding="utf-8")
+            except Exception:
+                pass
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import config  # sibling module: install-dir lookup + .env-driven endpoints
 
