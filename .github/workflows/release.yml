@@ -10,7 +10,7 @@ name: Release
 # the commit history since the previous tag).
 # 
 # To re-trigger for the same version, delete re-tag and push, the workflow will re-run and overwrite the release
-# git tag -d v1.2 && git tag v1.2 && git push origin v1.2
+# git tag -d v1.2 && git tag v1.2 && git push origin v1.2 --force
 
 on:
   push:
