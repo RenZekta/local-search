@@ -1,6 +1,6 @@
 # 🔍 Local Search — a private web-browsing system for AI models
 
-**SearXNG + Firecrawl + the local-web agent skill, running entirely on your machine, behind two local ports.**
+**SearXNG + Firecrawl + the local-web-search agent skill, running entirely on your machine, behind two local ports.**
 
 Give any LLM — a local model in LM Studio, a cloud model, an agent, an MCP
 client, or a plain chat UI — the ability to **search the web and read pages**
@@ -12,7 +12,7 @@ your network.
 |------|---------------|---------|
 | **SearXNG**  | `http://localhost:9990` | Metasearch + JSON API. Aggregates Google/Bing/DuckDuckGo/etc. |
 | **Firecrawl** | `http://localhost:9991` | Scrape / crawl / map / search / extract — returns clean Markdown. |
-| **local-web** | `~/.agents/skills/local-web` | Bundled agent skill: search + read + auto-start the stack. |
+| **local-web-search** | `~/.agents/skills/local-web-search` | Bundled agent skill: search + read + auto-start the stack. |
 
 > Both ports are fully configurable at install time. The defaults (`9990` and
 > `9991`) are chosen to avoid clashing with common dev servers.
@@ -27,7 +27,7 @@ your network.
 4. [Managing the stack](#managing-the-stack)
 5. [How it fits together](#how-it-fits-together)
 6. [Using it with AI models](#using-it-with-ai-models)
-   - [A. The bundled local-web skill (recommended)](#a-the-bundled-local-web-skill-recommended)
+   - [A. The bundled local-web-search skill (recommended)](#a-the-bundled-local-web-search-skill-recommended)
    - [B. Direct SearXNG JSON API](#b-direct-searxng-json-api)
    - [C. Direct Firecrawl REST API](#c-direct-firecrawl-rest-api)
    - [D. Connect a local LLM (LM Studio, etc.)](#d-connect-a-local-llm-lm-studio-etc)
@@ -56,11 +56,11 @@ A single Docker Compose stack of six services on a private bridge network,
 | **rabbitmq** | `rabbitmq:3-management` | Firecrawl message broker. |
 | **nuq-postgres** | `ghcr.io/firecrawl/nuq-postgres:latest` | Firecrawl job-state DB (pg_cron enabled). |
 
-On top of the containers, the installer bundles **local-web** — a skill for
+On top of the containers, the installer bundles **local-web-search** — a skill for
 agents that load skills from `~/.agents/skills/` (`C:\Users\You\.agents\skills\`
 on Windows). It gives the agent a complete web-research workflow: search via
 SearXNG, read pages via Firecrawl, and even start the Docker stack
-automatically when it's down. See [section A](#a-the-bundled-local-web-skill-recommended).
+automatically when it's down. See [section A](#a-the-bundled-local-web-search-skill-recommended).
 
 Only **two host ports** are published (`9990` and `9991` by default). Everything
 else stays on the private `local-search-net` bridge network. Firecrawl's
@@ -76,7 +76,7 @@ Firecrawl call can both search *and* fetch full page content.
   - Linux: [Docker Engine](https://docs.docker.com/engine/install/) + the `docker-compose-plugin` package. Add your user to the `docker` group so you don't need `sudo`.
 - **~5 GB free disk** for images and data.
 - **8 GB RAM / 4 CPU cores** recommended (the Firecrawl + Playwright stack is the heavy part; reduce resource limits in `docker-compose.yml` for smaller hosts).
-- **Python 3.8+** for the bundled local-web skill scripts (optional but recommended — it's the easiest way to use the stack).
+- **Python 3.8+** for the bundled local-web-search skill scripts (optional but recommended — it's the easiest way to use the stack).
 - *(Optional, for Firecrawl AI features)* **LM Studio** or any OpenAI-compatible local server — see [section D](#d-connect-a-local-llm-lm-studio-etc).
 - *(Optional, for MCP)* **Node.js 18+** so `npx firecrawl-mcp` works.
 
@@ -92,7 +92,7 @@ docker compose version # v2 is installed
 ## Quick start (one-click install)
 
 > **The installer is self-contained.** Every file it needs (`docker-compose.yml`,
-> `config/searxng/settings.yml`, `.env.example`, the bundled `local-web` skill,
+> `config/searxng/settings.yml`, `.env.example`, the bundled `local-web-search` skill,
 > all the run/stop/update/uninstall scripts, this README, and even the *other*
 > platform's installer) is embedded inside it. You can download **just
 > `install-local-search.bat`** (Windows) or **just `install-local-search.sh`**
@@ -104,7 +104,7 @@ Run **one** installer for your platform. It will ask you a few things — instal
 folder, SearXNG port, Firecrawl port, (optionally) a local LLM — with sensible
 defaults you can accept by pressing **Enter**. It then generates
 cryptographically-secure credentials, writes your `.env`, **installs the
-local-web skill**, pulls the images, and starts the stack.
+local-web-search skill**, pulls the images, and starts the stack.
 
 > **Docker isn't running?** No problem — the installer starts it for you: it
 > launches Docker Desktop (Windows/macOS) or the Docker service
@@ -147,13 +147,13 @@ When it finishes you'll see:
 ```
 SearXNG  (search + JSON API):  http://localhost:9990
 Firecrawl (scrape/crawl API): http://localhost:9991
-Agent skill: C:\Users\You\.agents\skills\local-web   (or ~/.agents/skills/local-web)
+Agent skill: C:\Users\You\.agents\skills\local-web-search   (or ~/.agents/skills/local-web-search)
 ```
 
 Open `http://localhost:9990` in a browser to see the SearXNG search UI — or,
 if your agent loads skills from `~/.agents/skills/`, just ask it to research
-something current and it will use **local-web** automatically (see
-[section A](#a-the-bundled-local-web-skill-recommended)).
+something current and it will use **local-web-search** automatically (see
+[section A](#a-the-bundled-local-web-search-skill-recommended)).
 
 ---
 
@@ -175,9 +175,9 @@ double-clicking or `./`-ing them.
   redis cache, rabbitmq/postgres data) are preserved.
 - **Update** runs `docker compose pull` then `docker compose up -d`, so it
   both upgrades images **and** applies any port/LLM edits you made to `.env`;
-  it also re-copies the bundled `local-web` skill into `~/.agents/skills/`.
+  it also re-copies the bundled `local-web-search` skill into `~/.agents/skills/`.
 - **Uninstall** runs `docker compose down -v` (deletes volumes + data),
-  removes the `local-web` skill from `~/.agents/skills/local-web`, then
+  removes the `local-web-search` skill from `~/.agents/skills/local-web-search`, then
   optionally deletes the install folder. Pulled images are kept; reclaim them
   with `docker image prune -a` if desired.
 
@@ -186,7 +186,7 @@ double-clicking or `./`-ing them.
 ## How it fits together
 
 ```
-        your AI model / agent (local-web skill) / MCP client / chat UI
+        your AI model / agent (local-web-search skill) / MCP client / chat UI
                       │
    ┌──────────────────┼─────────────────────┐
    ▼                                       ▼
@@ -212,8 +212,8 @@ Three key wiring decisions the installer makes for you:
 2. **Firecrawl → SearXNG** — the Firecrawl container sets
    `SEARXNG_ENDPOINT=http://searxng:8080`, so Firecrawl's `/v1/search` uses your
    local SearXNG instead of needing a third-party search provider.
-3. **local-web skill auto-install** — the installer copies the bundled skill to
-   `~/.agents/skills/local-web/` (add/override) and records the install path in
+3. **local-web-search skill auto-install** — the installer copies the bundled skill to
+   `~/.agents/skills/local-web-search/` (add/override) and records the install path in
    an `install-dir.txt` hint inside the skill, so the skill finds the stack even
    if you installed to a custom folder and Docker isn't running yet.
 
@@ -224,18 +224,18 @@ Three key wiring decisions the installer makes for you:
 There are **seven** ways to use this system, from lowest to highest
 integration. Pick what fits your stack — you can mix and match.
 
-### A. The bundled local-web skill (recommended)
+### A. The bundled local-web-search skill (recommended)
 
-The installer ships with **local-web**, an agent skill that turns any
+The installer ships with **local-web-search**, an agent skill that turns any
 skill-loading agent into a web researcher with zero configuration. If your
 agent reads skills from `~/.agents/skills/`
 (`C:\Users\You\.agents\skills\` on Windows), it's already available after
 install — restart the agent if it was running.
 
 The installer:
-- puts a copy in `<install folder>/local-web/`, and
+- puts a copy in `<install folder>/local-web-search/`, and
 - **automatically installs (add/override)** it into
-  `~/.agents/skills/local-web/`.
+  `~/.agents/skills/local-web-search/`.
 
 What the skill does for the agent:
 
@@ -261,10 +261,10 @@ What the skill does for the agent:
 Manual usage (exactly what the agent runs — no separate start step needed):
 
 ```bash
-python ~/.agents/skills/local-web/scripts/web_search.py "latest python release"
-python ~/.agents/skills/local-web/scripts/web_scrape.py "https://example.com"
+python ~/.agents/skills/local-web-search/scripts/web_search.py "latest python release"
+python ~/.agents/skills/local-web-search/scripts/web_scrape.py "https://example.com"
 # optional pre-flight check / status report:
-python ~/.agents/skills/local-web/scripts/ensure_stack.py --check
+python ~/.agents/skills/local-web-search/scripts/ensure_stack.py --check
 ```
 
 The full agent-facing instructions live in the skill's `SKILL.md`. Keeping the
@@ -495,8 +495,8 @@ Same shape — add an `mcpServers` entry to that tool's config file
 > **Note for local llama.cpp servers:** the Firecrawl MCP server ships very
 > large tool definitions, which can exceed some local inference servers'
 > limits (e.g. llama.cpp's `MAX_REPETITION_THRESHOLD` of 2000). If your local
-> model fails to load the MCP tools, use the bundled **local-web skill**
-> ([section A](#a-the-bundled-local-web-skill-recommended)) instead — it works
+> model fails to load the MCP tools, use the bundled **local-web-search skill**
+> ([section A](#a-the-bundled-local-web-search-skill-recommended)) instead — it works
 > with any model that can run a shell command, and is the recommended path for
 > local setups anyway.
 
@@ -580,7 +580,7 @@ SearXNG behaviour (engines, formats, limiter) is tuned in
 bot limiter. To add/remove engines, edit that file and run `Update.bat` /
 `./update.sh` (the container reads it at start).
 
-The local-web skill needs no configuration: it reads the same `.env` at
+The local-web-search skill needs no configuration: it reads the same `.env` at
 runtime. The only extra file it uses is `install-dir.txt` (written by the
 installer next to the skill's `SKILL.md`), which records the install folder so
 the skill can start the stack even from a non-default location. To point the
@@ -616,7 +616,7 @@ and (b) `.env` has `OPENAI_BASE_URL=http://host.docker.internal:1234/v1`
 (the installer does this conversion automatically). Test from the host first:
 `curl http://localhost:1234/v1/models`.
 
-**The local-web skill can't find the install folder.**
+**The local-web-search skill can't find the install folder.**
 The skill looks for the compose folder via (1) the `LOCAL_SEARCH_DIR` env var,
 (2) the compose labels on the running containers, (3) the `install-dir.txt`
 hint the installer wrote next to the skill, and (4) `~/local-search`. If you
@@ -625,7 +625,7 @@ to refresh the hint — or export `LOCAL_SEARCH_DIR=/path/to/local-search`.
 
 **The agent doesn't see the skill after install.**
 Skills are usually scanned at agent startup — restart the agent. Also check the
-skill actually landed at `~/.agents/skills/local-web/SKILL.md` (the installer
+skill actually landed at `~/.agents/skills/local-web-search/SKILL.md` (the installer
 prints where it put it).
 
 **First `docker compose pull` is slow / hits a GHCR 401.**
@@ -653,13 +653,13 @@ then run the installer again.
 
 - **Update images & apply config changes & re-sync the skill:** `Update.bat` /
   `./update.sh` (`docker compose pull && docker compose up -d`, then re-copy
-  `local-web` into `~/.agents/skills/`). Data is preserved.
+  `local-web-search` into `~/.agents/skills/`). Data is preserved.
 - **Update the SearXNG `settings.yml` / `docker-compose.yml` template:** re-run
   the installer — it copies the latest template over, refreshes the
-  `local-web` skill, and backs up your existing `.env` to `.env.bak.<timestamp>`.
+  `local-web-search` skill, and backs up your existing `.env` to `.env.bak.<timestamp>`.
 - **Uninstall:** `Uninstall.bat` / `./uninstall.sh`. Removes containers + Docker
-  volumes (all Firecrawl/SearXNG data) + the `local-web` skill from
-  `~/.agents/skills/local-web`, then asks whether to delete the install folder.
+  volumes (all Firecrawl/SearXNG data) + the `local-web-search` skill from
+  `~/.agents/skills/local-web-search`, then asks whether to delete the install folder.
   Pulled images remain; reclaim with `docker image prune -a`.
 
 ---
@@ -684,7 +684,7 @@ then run the installer again.
 ## Credits & licenses
 
 This project is licensed under the **MPL-2.0** license — see [LICENSE](LICENSE)
-(it covers the bundled [local-web](local-web) skill too).
+(it covers the bundled [local-web-search](local-web-search) skill too).
 
 - [**SearXNG**](https://github.com/searxng/searxng) — AGPL-3.0, privacy-respecting metasearch engine.
 - [**Firecrawl**](https://github.com/firecrawl/firecrawl) — AGPL-3.0, the context API for web scraping/crawling/search.

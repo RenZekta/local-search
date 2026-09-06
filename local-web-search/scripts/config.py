@@ -1,4 +1,4 @@
-"""Shared helpers for the local-web scripts: locating the local-search
+"""Shared helpers for the local-web-search scripts: locating the local-search
 install folder and the endpoints it is actually listening on.
 
 The ports are NOT assumed: they are read from the install folder's .env
@@ -74,7 +74,7 @@ def _hinted_install_dir():
     copied this skill (install-dir.txt next to SKILL.md). This works even
     when the Docker engine is down and the install folder is not in the
     default location. Returns None when there is no hint file (e.g. the
-    skill was installed standalone from the local-web repo)."""
+    skill was installed standalone from the local-web-search repo)."""
     hint_file = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                              os.pardir, "install-dir.txt")
     try:

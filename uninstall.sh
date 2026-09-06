@@ -2,7 +2,7 @@
 # Uninstall the Local Search stack.
 #   - stops & removes containers
 #   - removes Docker volumes (Firecrawl job state, redis, rabbitmq, postgres)
-#   - removes the local-web agent skill (~/.agents/skills/local-web)
+#   - removes the local-web-search agent skill (~/.agents/skills/local-web-search)
 #   - optionally deletes the install folder
 set -u
 cd "$(dirname "$0")" || exit 1
@@ -28,8 +28,8 @@ This will:
   1. Stop and remove all Local Search containers.
   2. Remove the Docker VOLUMES (Firecrawl job state, redis cache,
      rabbitmq/postgres data). This deletes all stored data.
-  3. Remove the local-web agent skill from
-     ~/.agents/skills/local-web
+  3. Remove the local-web-search agent skill from
+     ~/.agents/skills/local-web-search
   4. (Optional) Delete the install folder and all its files.
 
   Pulled Docker images are NOT removed (use 'docker image prune'
@@ -47,8 +47,8 @@ $DC down -v --remove-orphans || echo "[WARNING] docker compose down reported err
 echo
 echo "Containers and volumes removed."
 echo
-echo "Removing the local-web agent skill..."
-SKILL_DIR="$HOME/.agents/skills/local-web"
+echo "Removing the local-web-search agent skill..."
+SKILL_DIR="$HOME/.agents/skills/local-web-search"
 if [ -d "$SKILL_DIR" ]; then
   rm -rf "$SKILL_DIR"
   echo "  Removed $SKILL_DIR"

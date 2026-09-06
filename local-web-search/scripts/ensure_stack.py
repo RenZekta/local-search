@@ -67,7 +67,7 @@ DISPLAY = {"searxng": "SearXNG", "firecrawl": "Firecrawl"}
 
 def endpoint_up(url, timeout=4):
     """True if the endpoint accepts connections (any HTTP status counts)."""
-    req = urllib.request.Request(url, headers={"User-Agent": "zcode-local-web/1.0"})
+    req = urllib.request.Request(url)
     try:
         with urllib.request.urlopen(req, timeout=timeout):
             return True

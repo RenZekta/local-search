@@ -47,7 +47,7 @@ def fetch(url):
     """GET the SearXNG JSON API. Raises HTTPError when the service answered
     with an error status (service is UP), URLError-family on connection
     problems (service is DOWN)."""
-    req = urllib.request.Request(url, headers={"User-Agent": "zcode-local-web/1.0"})
+    req = urllib.request.Request(url)
     with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
         return json.load(r)
 

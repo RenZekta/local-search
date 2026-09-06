@@ -46,7 +46,7 @@ def fetch(url):
     req = urllib.request.Request(
         ENDPOINT,
         data=body,
-        headers={"Content-Type": "application/json", "User-Agent": "zcode-local-web/1.0"},
+        headers={"Content-Type": "application/json"},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=TIMEOUT) as r:

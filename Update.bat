@@ -45,12 +45,12 @@ if errorlevel 1 (
 )
 
 echo.
-echo [3/3] Refreshing the local-web agent skill...
-if exist "%~dp0local-web\SKILL.md" (
-  set "SKILL_DIR=%USERPROFILE%\.agents\skills\local-web"
+echo [3/3] Refreshing the local-web-search agent skill...
+if exist "%~dp0local-web-search\SKILL.md" (
+  set "SKILL_DIR=%USERPROFILE%\.agents\skills\local-web-search"
   if exist "!SKILL_DIR!" rd /s /q "!SKILL_DIR!"
   if not exist "%USERPROFILE%\.agents\skills" mkdir "%USERPROFILE%\.agents\skills"
-  xcopy /E /I /Y /Q "%~dp0local-web" "!SKILL_DIR!" >nul
+  xcopy /E /I /Y /Q "%~dp0local-web-search" "!SKILL_DIR!" >nul
   if errorlevel 1 (
     echo   [WARNING] Could not copy the skill to !SKILL_DIR!.
   ) else (
@@ -58,13 +58,13 @@ if exist "%~dp0local-web\SKILL.md" (
     echo   Skill refreshed at !SKILL_DIR!
   )
 ) else (
-  echo   local-web skill source not found in this folder - skipping.
+  echo   local-web-search skill source not found in this folder - skipping.
 )
 
 echo.
 echo Update complete. Data volumes were preserved.
 echo   - If you changed ports or LLM settings in .env, they are now applied.
-echo   - The local-web skill was re-synced from this folder.
+echo   - The local-web-search skill was re-synced from this folder.
 echo   - To update the SearXNG settings.yml or docker-compose.yml template,
 echo     re-run install-local-search.bat (it backs up your current .env).
 echo.
