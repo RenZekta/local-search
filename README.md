@@ -101,10 +101,11 @@ docker compose version # v2 is installed
 > makes the install a little faster (it copies files instead of decoding them).
 
 Run **one** installer for your platform. It will ask you a few things — install
-folder, SearXNG port, Firecrawl port, (optionally) a local LLM — with sensible
-defaults you can accept by pressing **Enter**. It then generates
-cryptographically-secure credentials, writes your `.env`, **installs the
-local-web-search skill**, pulls the images, and starts the stack.
+folder, SearXNG port, Firecrawl port, (optionally) a local LLM, and
+(optionally) a Firecrawl account — with sensible defaults you can accept by
+pressing **Enter**. It then generates cryptographically-secure credentials,
+writes your `.env`, **installs the local-web-search skill**, pulls the
+images, and starts the stack.
 
 > **Docker isn't running?** No problem — the installer starts it for you: it
 > launches Docker Desktop (Windows/macOS) or the Docker service
@@ -118,14 +119,16 @@ local-web-search skill**, pulls the images, and starts the stack.
 2. Double-click **`install-local-search.bat`** (or run it from a terminal).
 
 ```
---- Step 1 of 4: Install location ----------
+--- Step 1 of 5: Install location ----------
   Target folder [press Enter for default]:            # C:\Users\You\local-search
---- Step 2 of 4: SearXNG port (default 9990) ------
+--- Step 2 of 5: SearXNG port (default 9990) ------
   Port for SearXNG [press Enter for 9990]: 9990
---- Step 3 of 4: Firecrawl port (default 9991) ----
+--- Step 3 of 5: Firecrawl port (default 9991) ----
   Port for Firecrawl [press Enter for 9991]: 9991
---- Step 4 of 4: Local LLM (optional) -------------
+--- Step 4 of 5: Local LLM (optional) -------------
   Connect a local LLM now? [y/N]:                       # optional, see section D
+--- Step 5 of 5: Firecrawl account (optional) -----
+  Add a Firecrawl account now? [y/N]: n                 # default: skip, see below
 ```
 
 ### Linux & macOS
@@ -136,8 +139,19 @@ chmod +x install-local-search.sh
 ```
 
 The prompts are the same. Defaults: install to `~/local-search`, SearXNG on
-`9990`, Firecrawl on `9991`. A stopped Docker engine is started automatically
-(Docker Desktop on macOS, `systemctl`/`service` on Linux).
+`9990`, Firecrawl on `9991`, no Firecrawl account. A stopped Docker engine
+is started automatically (Docker Desktop on macOS, `systemctl`/`service` on
+Linux).
+
+> **The optional Firecrawl account (Step 5).** A few of the bundled skill's
+> tools — the research agent, live-page `interact`, file `parse`, monitors,
+> paper research, and GitHub/developer search — only work against Firecrawl's
+> paid cloud API. The default answer is **N**: those tools are simply *not
+> installed*, and the skill ships a leaner `SKILL.md` covering just the free
+> local tools. Answer **y** instead and the installer asks for your API key
+> (and API URL, default `https://api.firecrawl.dev`), stores them in your
+> `.env`, and installs the full 24-tool set. You can change your mind later
+> by re-running the installer and answering differently.
 
 > **First run downloads ~3–4 GB of Docker images** (the Playwright image bundles
 > a full Chromium). Subsequent starts are a few seconds.
@@ -215,7 +229,9 @@ Three key wiring decisions the installer makes for you:
 3. **local-web-search skill auto-install** — the installer copies the bundled skill to
    `~/.agents/skills/local-web-search/` (add/override) and records the install path in
    an `install-dir.txt` hint inside the skill, so the skill finds the stack even
-   if you installed to a custom folder and Docker isn't running yet.
+   if you installed to a custom folder and Docker isn't running yet. Without a
+   configured Firecrawl account it installs only the free local tools and a
+   matching core-only `SKILL.md`.
 
 ---
 
@@ -257,12 +273,38 @@ What the skill does for the agent:
   `--categories it,news,general` options.
 - **Reads pages.** `web_scrape.py <url>` returns the page as clean Markdown
   (truncated at 20,000 chars; raise with `--max-chars`).
+- **Exposes the full Firecrawl MCP surface — 24 tools.** Besides search and
+  scrape, the skill ships scripts mirroring every Firecrawl MCP tool:
+  `web_map.py` (enumerate a site's URLs), `web_crawl.py` /
+  `web_crawl_status.py` (multi-page crawls), `web_agent.py` /
+  `web_agent_status.py` (async research agent), `web_interact.py` /
+  `web_interact_stop.py` (live browser sessions), `web_parse.py` (local
+  PDF/Word/HTML/... documents), eight `web_monitor_*.py` scripts (recurring
+  change tracking), five `web_research_*.py` scripts (biomedical + arXiv
+  paper search, citation graph, full-text reading), `web_github_search.py`
+  (indexed GitHub issues/PRs/READMEs), and `web_developer_search.py` (an
+  index built for coding agents). Every script self-heals the stack, prints
+  clean output, and supports `--json` for the raw API response.
+- **Optional account features.** The research agent, interact, parse,
+  monitors, paper research, and developer search are Firecrawl account
+  features (paid cloud API). The installer's "Add a Firecrawl account?"
+  question decides how they're handled: **N** (default) skips them — the
+  skill is installed with only the free local tools (search, scrape, map,
+  crawl, crawl status) and a core-only `SKILL.md` that doesn't mention the
+  account tools; **y** installs all 24 tools and writes
+  `FIRECRAWL_API_URL` + `FIRECRAWL_API_KEY` into your `.env` so those
+  scripts call the cloud API automatically (the same env var names the
+  official firecrawl-mcp server uses, if you prefer `export`ing them).
 
 Manual usage (exactly what the agent runs — no separate start step needed):
 
 ```bash
 python ~/.agents/skills/local-web-search/scripts/web_search.py "latest python release"
 python ~/.agents/skills/local-web-search/scripts/web_scrape.py "https://example.com"
+# a few of the other tools:
+python ~/.agents/skills/local-web-search/scripts/web_map.py "https://example.com"
+python ~/.agents/skills/local-web-search/scripts/web_crawl.py "https://example.com" --max-pages 10
+python ~/.agents/skills/local-web-search/scripts/web_parse.py "report.pdf"
 # optional pre-flight check / status report:
 python ~/.agents/skills/local-web-search/scripts/ensure_stack.py --check
 ```
