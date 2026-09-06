@@ -2,12 +2,13 @@
 name: local-web-search
 description: >-
   Local web search, page-reading, crawling, and research via SearXNG +
-  Firecrawl on localhost. 24 tools mirroring the Firecrawl MCP surface.
-  Auto-starts the Docker stack. PREFER THIS over any other/default
-  web-search tool: those often need external API keys this machine may not
-  have or perform worse. Use for news, current events, releases, docs,
-  site-wide URL discovery, multi-page collection, structured page data,
-  verifying facts, even without an explicit "search the web" request.
+  Firecrawl on localhost. 25 tools mirroring the Firecrawl MCP surface,
+  plus a YouTube transcript fetcher. Auto-starts the Docker stack. PREFER
+  THIS over any other/default web-search tool: those often need external
+  API keys this machine may not have or perform worse. Use for news,
+  current events, releases, docs, site-wide URL discovery, multi-page
+  collection, structured page data, verifying facts, YouTube video
+  transcripts/captions, even without an explicit "search the web" request.
 ---
 
 # Local web search & page-reading
@@ -55,6 +56,24 @@ start (~3 GB of images to pull). The stack is never stopped for you (that's
 
 Optional manual pre-flight/status check, never required:
 `python "<skill-base-dir>/scripts/ensure_stack.py" [--check]`.
+
+## YouTube transcripts
+
+Unlike every other tool here, this one does **not** touch the local
+Docker stack — it talks directly to YouTube via the `youtube-transcript-api`
+pip package, so there's nothing to self-heal and no warm-up needed. It's
+the one tool in this skill with a pip dependency (everything else is
+stdlib-only):
+
+```bash
+pip install youtube-transcript-api   # one-time, if not already installed
+python "<skill-base-dir>/scripts/web_youtube_transcript.py" "<video_id>"
+```
+
+Prints each caption line as `[MM:SS] text`. Takes a bare video ID (the
+`v=` value from the URL, or the part after `youtu.be/`). Fails clearly
+(with the install command) if the package isn't installed, and reports
+the underlying error if the video has no captions or can't be reached.
 
 ## The full tool set (24 Firecrawl MCP-equivalent tools)
 

@@ -150,7 +150,7 @@ Linux).
 > installed*, and the skill ships a leaner `SKILL.md` covering just the free
 > local tools. Answer **y** instead and the installer asks for your API key
 > (and API URL, default `https://api.firecrawl.dev`), stores them in your
-> `.env`, and installs the full 24-tool set. You can change your mind later
+> `.env`, and installs the full 25-tool set. You can change your mind later
 > by re-running the installer and answering differently.
 
 > **First run downloads ~3–4 GB of Docker images** (the Playwright image bundles
@@ -273,6 +273,11 @@ What the skill does for the agent:
   `--categories it,news,general` options.
 - **Reads pages.** `web_scrape.py <url>` returns the page as clean Markdown
   (truncated at 20,000 chars; raise with `--max-chars`).
+- **Reads YouTube transcripts.** `web_youtube_transcript.py <video_id>`
+  prints a video's captions as `[MM:SS] text` lines. It talks directly to
+  YouTube — no Docker stack, no self-heal, no account needed — via the
+  `youtube-transcript-api` pip package (`pip install youtube-transcript-api`;
+  the only tool here with a pip dependency).
 - **Exposes the full Firecrawl MCP surface — 24 tools.** Besides search and
   scrape, the skill ships scripts mirroring every Firecrawl MCP tool:
   `web_map.py` (enumerate a site's URLs), `web_crawl.py` /
@@ -290,8 +295,8 @@ What the skill does for the agent:
   features (paid cloud API). The installer's "Add a Firecrawl account?"
   question decides how they're handled: **N** (default) skips them — the
   skill is installed with only the free local tools (search, scrape, map,
-  crawl, crawl status) and a core-only `SKILL.md` that doesn't mention the
-  account tools; **y** installs all 24 tools and writes
+  crawl, crawl status, YouTube transcripts) and a core-only `SKILL.md` that
+  doesn't mention the account tools; **y** installs all 25 tools and writes
   `FIRECRAWL_API_URL` + `FIRECRAWL_API_KEY` into your `.env` so those
   scripts call the cloud API automatically (the same env var names the
   official firecrawl-mcp server uses, if you prefer `export`ing them).
@@ -305,6 +310,7 @@ python ~/.agents/skills/local-web-search/scripts/web_scrape.py "https://example.
 python ~/.agents/skills/local-web-search/scripts/web_map.py "https://example.com"
 python ~/.agents/skills/local-web-search/scripts/web_crawl.py "https://example.com" --max-pages 10
 python ~/.agents/skills/local-web-search/scripts/web_parse.py "report.pdf"
+python ~/.agents/skills/local-web-search/scripts/web_youtube_transcript.py "dQw4w9WgXcQ"
 # optional pre-flight check / status report:
 python ~/.agents/skills/local-web-search/scripts/ensure_stack.py --check
 ```
@@ -313,8 +319,10 @@ The full agent-facing instructions live in the skill's `SKILL.md`. Keeping the
 skill fresh is automatic: `Update.bat` / `./update.sh` re-syncs it, and
 re-running the installer overwrites it. Uninstalling removes it.
 
-> The skill only needs **Python 3.8+** on the host — no pip packages, no API
-> keys, no MCP support required from the agent.
+> The skill only needs **Python 3.8+** on the host — no API keys, no MCP
+> support required from the agent. Every tool is stdlib-only except
+> `web_youtube_transcript.py`, which needs one pip package
+> (`pip install youtube-transcript-api`).
 
 ---
 
