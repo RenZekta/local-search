@@ -8,7 +8,7 @@
 #  Services:
 #    searxng          metasearch + JSON API        -> host ${SEARXNG_PORT}
 #    firecrawl        scrape/crawl/search/map API  -> host ${FIRECRAWL_PORT}
-#    playwright-service  JS rendering for Firecrawl
+#    browserless       stealth JS rendering for Firecrawl (Browserless CE)
 #    redis               queue for Firecrawl
 #    rabbitmq            message broker for Firecrawl
 #    nuq-postgres        job state DB for Firecrawl
@@ -61,7 +61,7 @@ services:
       - ENV=local
       - REDIS_URL=redis://redis:6379
       - REDIS_RATE_LIMIT_URL=redis://redis:6379
-      - PLAYWRIGHT_MICROSERVICE_URL=http://playwright-service:3000/scrape
+      - PLAYWRIGHT_MICROSERVICE_URL=http://browserless:3000/scrape
       - USE_DB_AUTHENTICATION=false
       - BULL_AUTH_KEY=${BULL_AUTH_KEY}
       - LOGGING_LEVEL=${LOGGING_LEVEL:-info}
@@ -96,7 +96,7 @@ services:
     depends_on:
       redis:
         condition: service_started
-      playwright-service:
+      browserless:
         condition: service_started
       searxng:
         condition: service_started
@@ -109,16 +109,21 @@ services:
       - local-search-net
 
   # --------------------------------------------------------------------------
-  # Playwright headless browser service — does the actual JS-rendered fetching.
+  # Browserless (community edition) — stealth headless Chromium that does the
+  # actual JS-rendered fetching for Firecrawl. DEFAULT_STEALTH=true applies
+  # the built-in stealth patches (masks automation fingerprints such as
+  # navigator.webdriver) to every request without needing a ?stealth query
+  # param, which helps pages fronted by Cloudflare and similar bot checks.
   # --------------------------------------------------------------------------
-  playwright-service:
-    image: ghcr.io/firecrawl/playwright-service:latest
-    container_name: local-search-playwright
+  browserless:
+    image: ghcr.io/browserless/chromium:latest
+    container_name: local-search-browserless
     environment:
       - PORT=3000
-      - BLOCK_MEDIA=false
-      - ALLOW_LOCAL_WEBHOOKS=false
-      - MAX_CONCURRENT_PAGES=10
+      - TOKEN=${BROWSERLESS_TOKEN:-}
+      - DEFAULT_STEALTH=true
+      - CONCURRENT=10
+      - MAX_CONCURRENT_SESSIONS=10
     restart: unless-stopped
     networks:
       - local-search-net

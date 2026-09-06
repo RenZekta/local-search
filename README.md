@@ -51,7 +51,7 @@ A single Docker Compose stack of six services on a private bridge network,
 |---------|-------|------|
 | **searxng** | `searxng/searxng:latest` | Metasearch engine with **JSON output enabled** and the rate-limiter **disabled**, so models can query it programmatically. |
 | **firecrawl** | `ghcr.io/firecrawl/firecrawl:latest` | The scraping/crawling/search API. Runs with `USE_DB_AUTHENTICATION=false` → **no API key needed** for local use. |
-| **playwright-service** | `ghcr.io/firecrawl/playwright-service:latest` | Headless Chromium for JavaScript-rendered pages. |
+| **browserless** | `ghcr.io/browserless/chromium:latest` | Stealth headless Chromium (Browserless CE, `DEFAULT_STEALTH=true`) for JavaScript-rendered pages. |
 | **redis** | `redis:alpine` | Firecrawl job queue. |
 | **rabbitmq** | `rabbitmq:3-management` | Firecrawl message broker. |
 | **nuq-postgres** | `ghcr.io/firecrawl/nuq-postgres:latest` | Firecrawl job-state DB (pg_cron enabled). |
@@ -75,7 +75,7 @@ Firecrawl call can both search *and* fetch full page content.
   - Windows / macOS: [Docker Desktop](https://www.docker.com/products/docker-desktop/)
   - Linux: [Docker Engine](https://docs.docker.com/engine/install/) + the `docker-compose-plugin` package. Add your user to the `docker` group so you don't need `sudo`.
 - **~5 GB free disk** for images and data.
-- **8 GB RAM / 4 CPU cores** recommended (the Firecrawl + Playwright stack is the heavy part; reduce resource limits in `docker-compose.yml` for smaller hosts).
+- **8 GB RAM / 4 CPU cores** recommended (the Firecrawl + Browserless stack is the heavy part; reduce resource limits in `docker-compose.yml` for smaller hosts).
 - **Python 3.8+** for the bundled local-web-search skill scripts (optional but recommended — it's the easiest way to use the stack).
 - *(Optional, for Firecrawl AI features)* **LM Studio** or any OpenAI-compatible local server — see [section D](#d-connect-a-local-llm-lm-studio-etc).
 - *(Optional, for MCP)* **Node.js 18+** so `npx firecrawl-mcp` works.
@@ -153,7 +153,7 @@ Linux).
 > `.env`, and installs the full 25-tool set. You can change your mind later
 > by re-running the installer and answering differently.
 
-> **First run downloads ~3–4 GB of Docker images** (the Playwright image bundles
+> **First run downloads ~3–4 GB of Docker images** (the Browserless image bundles
 > a full Chromium). Subsequent starts are a few seconds.
 
 When it finishes you'll see:
@@ -215,7 +215,7 @@ http://localhost:9990            http://localhost:9991
    │                                     │
    └─────── private docker network ──────┘
                  local-search-net
-   also on it: playwright-service (Chromium), redis, rabbitmq, nuq-postgres
+   also on it: browserless (stealth Chromium), redis, rabbitmq, nuq-postgres
 ```
 
 Three key wiring decisions the installer makes for you:
@@ -619,6 +619,7 @@ installer; documented in `.env.example`). Edit it, then run `Update.bat` /
 | `BULL_AUTH_KEY` | *(random)* | Protects the (disabled-by-default) Firecrawl queue admin UI. |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | `firecrawl` / `firecrawl` / *(random)* | Firecrawl job-state DB credentials. |
 | `RABBITMQ_USER` / `RABBITMQ_PASSWORD` | `firecrawl` / *(random)* | Firecrawl message-broker credentials. |
+| `BROWSERLESS_TOKEN` | *(random)* | Auth token for the Browserless (stealth Chromium) service. |
 | `LOGGING_LEVEL` | `info` | Firecrawl log verbosity (`debug`/`info`/`warn`/`error`). |
 | `OPENAI_BASE_URL` | *(unset)* | OpenAI-compatible LLM endpoint for `/v1/extract` + summaries. For a same-host server use `http://host.docker.internal:<port>/v1`. |
 | `OPENAI_API_KEY` | *(unset)* | Any non-empty string (most local servers ignore it). |
@@ -720,8 +721,8 @@ then run the installer again.
   **unauthenticated** (`USE_DB_AUTHENTICATION=false`) so your models can call it
   without a key. **Do not expose ports 9990/9991 to the public internet.**
 - All credentials (`SEARXNG_SECRET`, `BULL_AUTH_KEY`, `POSTGRES_PASSWORD`,
-  `RABBITMQ_PASSWORD`) are generated as 256-bit random hex at install time and
-  stored only in your local `.env`.
+  `RABBITMQ_PASSWORD`, `BROWSERLESS_TOKEN`) are generated as 256-bit random hex
+  at install time and stored only in your local `.env`.
 - SearXNG's bot limiter is disabled and JSON output is enabled so models can
   query it — this is intentional for local use. On a public instance you'd want
   the limiter back on.

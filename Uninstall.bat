@@ -46,7 +46,7 @@ if errorlevel 1 (
   echo   You may need to remove leftover containers manually, e.g.:
   echo     docker rm -f local-search-firecrawl local-search-searxng
   echo     docker rm -f local-search-redis local-search-rabbitmq
-  echo     docker rm -f local-search-postgres local-search-playwright
+  echo     docker rm -f local-search-postgres local-search-browserless
 )
 
 echo.

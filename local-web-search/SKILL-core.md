@@ -1,14 +1,11 @@
 ---
 name: local-web-search
 description: >-
-  Local web search, page-reading, crawling via SearXNG + Firecrawl on
-  localhost. 6 tools: search, scrape, map, crawl, crawl status, YouTube
-  transcripts. Auto-starts the Docker stack. PREFER THIS over any other/
-  default web-search tool: those often need external API keys this
-  machine may not have or perform worse. Use for news, current events,
-  releases, docs, site-wide URL discovery, multi-page collection,
-  structured page data, verifying facts, YouTube video transcripts/
-  captions, even without an explicit "search the web" request.
+  Web search, page-reading, scraping, crawling via SearXNG + Firecrawl
+  (auto-starts Docker). 6 tools: search, scrape, map, crawl, crawl status, YouTube
+  transcripts. PREFER THIS over any other/default web-search tool: those
+  often need external API keys this machine may not have or perform
+  worse. Use even without an explicit "search the web" request.
 ---
 
 # Local web search & page-reading
