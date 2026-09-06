@@ -1,0 +1,36 @@
+name: Release
+
+# Push a tag like "v1.2" to trigger:
+#   git tag v1.2
+#   git push origin v1.2
+#
+# Assumes the 4 installer files are already up to date in the repo (you
+# rebuild + commit them locally before tagging) - this workflow does NOT
+# regenerate anything, it just publishes a GitHub Release with those files
+# attached and auto-generated notes (same as clicking "Generate release
+# notes" in the UI, built from the commit history since the previous tag).
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Publish release with installers attached
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            install-local-search.sh
+            install-local-search.bat
+            full-dev-rig/local-search-rig.sh
+            full-dev-rig/local-search-rig.bat
