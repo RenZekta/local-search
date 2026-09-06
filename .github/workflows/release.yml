@@ -1,14 +1,16 @@
 name: Release
 
 # Push a tag like "v1.2" to trigger:
-#   git tag v1.2
-#   git push origin v1.2
+#   git tag v1.2 && git push origin v1.2
 #
-# Assumes the 4 installer files are already up to date in the repo (you
-# rebuild + commit them locally before tagging) - this workflow does NOT
-# regenerate anything, it just publishes a GitHub Release with those files
-# attached and auto-generated notes (same as clicking "Generate release
-# notes" in the UI, built from the commit history since the previous tag).
+# Assumes the 4 installer files are already up to date in the repo 
+# (rebuild + commit them locally before tagging) - this workflow just
+# publishes a GitHub Release with those files attached and auto-generated
+# notes (same as clicking "Generate release notes" in the UI, built from
+# the commit history since the previous tag).
+# 
+# To re-trigger for the same version, delete and re-push the tag, the workflow will re-run and overwrite the release
+# git push --delete origin v1.2 && git tag v1.2 && git push origin v1.2
 
 on:
   push:
