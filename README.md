@@ -44,14 +44,17 @@ your network.
 
 ## What you get
 
-A single Docker Compose stack of six services on a private bridge network,
-**plus** a ready-made agent skill that ties it all together:
+A single Docker Compose stack of six running services on a private bridge
+network (seven are defined, but the installer only starts one of the two
+browser engines below), **plus** a ready-made agent skill that ties it all
+together:
 
 | Service | Image | Role |
 |---------|-------|------|
 | **searxng** | `searxng/searxng:latest` | Metasearch engine with **JSON output enabled** and the rate-limiter **disabled**, so models can query it programmatically. |
 | **firecrawl** | `ghcr.io/firecrawl/firecrawl:latest` | The scraping/crawling/search API. Runs with `USE_DB_AUTHENTICATION=false` → **no API key needed** for local use. |
-| **browserless** | `ghcr.io/browserless/chromium:latest` | Stealth headless Chromium (Browserless CE, `DEFAULT_STEALTH=true`) for JavaScript-rendered pages. |
+| **playwright-service** *(default engine)* | `ghcr.io/firecrawl/playwright-service:latest` | Headless Chromium for JavaScript-rendered pages — the classic Firecrawl engine. Starts when the installer's Step 4 answer is Playwright (the default). |
+| **browserless** *(alternate engine)* | `ghcr.io/browserless/chromium:latest` | Stealth headless Chromium (Browserless CE, `DEFAULT_STEALTH=true`) for JavaScript-rendered pages; better at avoiding Cloudflare-style bot checks. Starts instead of Playwright when Step 4 is answered **y**. |
 | **redis** | `redis:alpine` | Firecrawl job queue. |
 | **rabbitmq** | `rabbitmq:3-management` | Firecrawl message broker. |
 | **nuq-postgres** | `ghcr.io/firecrawl/nuq-postgres:latest` | Firecrawl job-state DB (pg_cron enabled). |
@@ -75,7 +78,7 @@ Firecrawl call can both search *and* fetch full page content.
   - Windows / macOS: [Docker Desktop](https://www.docker.com/products/docker-desktop/)
   - Linux: [Docker Engine](https://docs.docker.com/engine/install/) + the `docker-compose-plugin` package. Add your user to the `docker` group so you don't need `sudo`.
 - **~5 GB free disk** for images and data.
-- **8 GB RAM / 4 CPU cores** recommended (the Firecrawl + Browserless stack is the heavy part; reduce resource limits in `docker-compose.yml` for smaller hosts).
+- **8 GB RAM / 4 CPU cores** recommended (Firecrawl plus its browser engine — Playwright or Browserless — is the heavy part; reduce resource limits in `docker-compose.yml` for smaller hosts).
 - **Python 3.8+** for the bundled local-web-search skill scripts (optional but recommended — it's the easiest way to use the stack).
 - *(Optional, for Firecrawl AI features)* **LM Studio** or any OpenAI-compatible local server — see [section D](#d-connect-a-local-llm-lm-studio-etc).
 - *(Optional, for MCP)* **Node.js 18+** so `npx firecrawl-mcp` works.
@@ -100,12 +103,17 @@ docker compose version # v2 is installed
 > working folder. Downloading the whole `local-search` folder or the zip just
 > makes the install a little faster (it copies files instead of decoding them).
 
-Run **one** installer for your platform. It will ask you a few things — install
-folder, SearXNG port, Firecrawl port, (optionally) a local LLM, and
-(optionally) a Firecrawl account — with sensible defaults you can accept by
-pressing **Enter**. It then generates cryptographically-secure credentials,
-writes your `.env`, **installs the local-web-search skill**, pulls the
-images, and starts the stack.
+Run **one** installer for your platform. First it asks a single **"Use default
+settings? [Y/n]"** question — press **Enter** and it installs straight away
+with sensible defaults (install to the default folder, SearXNG on `9990`,
+Firecrawl on `9991`, the Playwright browser engine, no local LLM, no Firecrawl
+account): a true one-click install. Answer **n** instead and it walks you
+through the full six-step setup — install folder, SearXNG port, Firecrawl
+port, a browser rendering engine (Playwright or Browserless), (optionally) a
+local LLM, and (optionally) a Firecrawl account — with the same defaults
+offered at each step if you just press **Enter**. Either way it then generates
+cryptographically-secure credentials, writes your `.env`, **installs the
+local-web-search skill**, pulls the images, and starts the stack.
 
 > **Docker isn't running?** No problem — the installer starts it for you: it
 > launches Docker Desktop (Windows/macOS) or the Docker service
@@ -119,15 +127,29 @@ images, and starts the stack.
 2. Double-click **`install-local-search.bat`** (or run it from a terminal).
 
 ```
---- Step 1 of 5: Install location ----------
+============================================================
+  Quick setup
+============================================================
+  Defaults: C:\Users\You\local-search, SearXNG 9990, Firecrawl 9991,
+  Playwright engine, no local LLM, no Firecrawl account.
+  Use default settings? [Y/n]:                          # Enter = one-click install
+```
+
+Press **Enter** and you're done — it skips straight to the summary and
+installs. Answer **n** and it walks through the full setup instead:
+
+```
+--- Step 1 of 6: Install location ----------
   Target folder [press Enter for default]:            # C:\Users\You\local-search
---- Step 2 of 5: SearXNG port (default 9990) ------
+--- Step 2 of 6: SearXNG port (default 9990) ------
   Port for SearXNG [press Enter for 9990]: 9990
---- Step 3 of 5: Firecrawl port (default 9991) ----
+--- Step 3 of 6: Firecrawl port (default 9991) ----
   Port for Firecrawl [press Enter for 9991]: 9991
---- Step 4 of 5: Local LLM (optional) -------------
+--- Step 4 of 6: Browser rendering engine (default: Playwright) ---
+  Use Browserless instead of Playwright? [y/N]:         # default: Playwright, see below
+--- Step 5 of 6: Local LLM (optional) -------------
   Connect a local LLM now? [y/N]:                       # optional, see section D
---- Step 5 of 5: Firecrawl account (optional) -----
+--- Step 6 of 6: Firecrawl account (optional) -----
   Add a Firecrawl account now? [y/N]: n                 # default: skip, see below
 ```
 
@@ -139,11 +161,29 @@ chmod +x install-local-search.sh
 ```
 
 The prompts are the same. Defaults: install to `~/local-search`, SearXNG on
-`9990`, Firecrawl on `9991`, no Firecrawl account. A stopped Docker engine
-is started automatically (Docker Desktop on macOS, `systemctl`/`service` on
-Linux).
+`9990`, Firecrawl on `9991`, Playwright as the browser engine, no local LLM,
+no Firecrawl account. A stopped Docker engine is started automatically
+(Docker Desktop on macOS, `systemctl`/`service` on Linux).
 
-> **The optional Firecrawl account (Step 5).** A few of the bundled skill's
+> **One-click install.** The very first question is **"Use default settings?
+> [Y/n]"**. Pressing **Enter** (or answering **y**) accepts it and skips
+> straight past all six numbered steps below, using the defaults shown above
+> — that's the whole install. Answer **n** to go through the full setup and
+> customize anything. Either way you can still change your mind afterward by
+> editing `.env` and running `Update.bat` / `./update.sh`.
+
+> **The browser rendering engine (Step 4).** Firecrawl needs a headless
+> browser to fetch JS-rendered pages. The default answer, **N**, keeps
+> **Playwright** — the classic Firecrawl engine (`ghcr.io/firecrawl/playwright-service`).
+> Answering **y** switches to **Browserless** (`ghcr.io/browserless/chromium`)
+> instead, run in its built-in stealth mode, which masks common automation
+> fingerprints (e.g. `navigator.webdriver`) and tends to get blocked less
+> often by Cloudflare-style bot checks. Only the engine you pick is actually
+> started — the installer writes `COMPOSE_PROFILES` and
+> `PLAYWRIGHT_MICROSERVICE_URL` to `.env` accordingly. To switch later, edit
+> those two lines in `.env` and run `Update.bat` / `./update.sh`.
+
+> **The optional Firecrawl account (Step 6).** A few of the bundled skill's
 > tools — the research agent, live-page `interact`, file `parse`, monitors,
 > paper research, and GitHub/developer search — only work against Firecrawl's
 > paid cloud API. The default answer is **N**: those tools are simply *not
@@ -153,8 +193,9 @@ Linux).
 > `.env`, and installs the full 25-tool set. You can change your mind later
 > by re-running the installer and answering differently.
 
-> **First run downloads ~3–4 GB of Docker images** (the Browserless image bundles
-> a full Chromium). Subsequent starts are a few seconds.
+> **First run downloads ~3–4 GB of Docker images** (Playwright's and Browserless's
+> images each bundle a full Chromium, so only the one you picked is pulled).
+> Subsequent starts are a few seconds.
 
 When it finishes you'll see:
 
@@ -215,10 +256,10 @@ http://localhost:9990            http://localhost:9991
    │                                     │
    └─────── private docker network ──────┘
                  local-search-net
-   also on it: browserless (stealth Chromium), redis, rabbitmq, nuq-postgres
+   also on it: playwright-service OR browserless (whichever you picked in Step 4), redis, rabbitmq, nuq-postgres
 ```
 
-Three key wiring decisions the installer makes for you:
+Four key wiring decisions the installer makes for you:
 
 1. **SearXNG JSON + no limiter** — `config/searxng/settings.yml` sets
    `search.formats: [html, json]` and `server.limiter: false`, so models can hit
@@ -226,7 +267,11 @@ Three key wiring decisions the installer makes for you:
 2. **Firecrawl → SearXNG** — the Firecrawl container sets
    `SEARXNG_ENDPOINT=http://searxng:8080`, so Firecrawl's `/v1/search` uses your
    local SearXNG instead of needing a third-party search provider.
-3. **local-web-search skill auto-install** — the installer copies the bundled skill to
+3. **Firecrawl → browser engine** — `docker-compose.yml` defines both
+   `playwright-service` and `browserless` behind Compose profiles; `.env`'s
+   `COMPOSE_PROFILES` (set by Step 4) enables just one, and
+   `PLAYWRIGHT_MICROSERVICE_URL` points Firecrawl at it.
+4. **local-web-search skill auto-install** — the installer copies the bundled skill to
    `~/.agents/skills/local-web-search/` (add/override) and records the install path in
    an `install-dir.txt` hint inside the skill, so the skill finds the stack even
    if you installed to a custom folder and Docker isn't running yet. Without a
@@ -619,7 +664,9 @@ installer; documented in `.env.example`). Edit it, then run `Update.bat` /
 | `BULL_AUTH_KEY` | *(random)* | Protects the (disabled-by-default) Firecrawl queue admin UI. |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | `firecrawl` / `firecrawl` / *(random)* | Firecrawl job-state DB credentials. |
 | `RABBITMQ_USER` / `RABBITMQ_PASSWORD` | `firecrawl` / *(random)* | Firecrawl message-broker credentials. |
-| `BROWSERLESS_TOKEN` | *(random)* | Auth token for the Browserless (stealth Chromium) service. |
+| `COMPOSE_PROFILES` | `playwright` | Which browser engine actually starts: `playwright` or `browserless` (installer Step 4). |
+| `PLAYWRIGHT_MICROSERVICE_URL` | `http://playwright-service:3000/scrape` | Firecrawl's URL for its browser engine — must match `COMPOSE_PROFILES` (`http://browserless:3000/scrape` when that's `browserless`). |
+| `BROWSERLESS_TOKEN` | *(random)* | Auth token for the Browserless service. Only used when `COMPOSE_PROFILES=browserless`; harmless if unused. |
 | `LOGGING_LEVEL` | `info` | Firecrawl log verbosity (`debug`/`info`/`warn`/`error`). |
 | `OPENAI_BASE_URL` | *(unset)* | OpenAI-compatible LLM endpoint for `/v1/extract` + summaries. For a same-host server use `http://host.docker.internal:<port>/v1`. |
 | `OPENAI_API_KEY` | *(unset)* | Any non-empty string (most local servers ignore it). |

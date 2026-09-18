@@ -6,12 +6,18 @@
 #  the generated .env file (created at install time).
 #
 #  Services:
-#    searxng          metasearch + JSON API        -> host ${SEARXNG_PORT}
-#    firecrawl        scrape/crawl/search/map API  -> host ${FIRECRAWL_PORT}
-#    browserless       stealth JS rendering for Firecrawl (Browserless CE)
+#    searxng             metasearch + JSON API        -> host ${SEARXNG_PORT}
+#    firecrawl           scrape/crawl/search/map API  -> host ${FIRECRAWL_PORT}
+#    playwright-service  JS rendering for Firecrawl (profile: playwright)
+#    browserless         stealth JS rendering for Firecrawl (profile: browserless)
 #    redis               queue for Firecrawl
 #    rabbitmq            message broker for Firecrawl
 #    nuq-postgres        job state DB for Firecrawl
+#
+#  Only ONE of playwright-service / browserless actually starts: the
+#  installer's "Browser rendering engine" question writes COMPOSE_PROFILES
+#  to .env (default "playwright") to pick which one, and points
+#  PLAYWRIGHT_MICROSERVICE_URL at it. The other stays defined but dormant.
 #
 #  Only the two host ports below are published. Everything else stays on the
 #  private "local-search-net" bridge network.
@@ -61,7 +67,7 @@ services:
       - ENV=local
       - REDIS_URL=redis://redis:6379
       - REDIS_RATE_LIMIT_URL=redis://redis:6379
-      - PLAYWRIGHT_MICROSERVICE_URL=http://browserless:3000/scrape
+      - PLAYWRIGHT_MICROSERVICE_URL=${PLAYWRIGHT_MICROSERVICE_URL:-http://playwright-service:3000/scrape}
       - USE_DB_AUTHENTICATION=false
       - BULL_AUTH_KEY=${BULL_AUTH_KEY}
       - LOGGING_LEVEL=${LOGGING_LEVEL:-info}
@@ -96,8 +102,12 @@ services:
     depends_on:
       redis:
         condition: service_started
+      playwright-service:
+        condition: service_started
+        required: false
       browserless:
         condition: service_started
+        required: false
       searxng:
         condition: service_started
       nuq-postgres:
@@ -109,15 +119,36 @@ services:
       - local-search-net
 
   # --------------------------------------------------------------------------
+  # Playwright headless browser service — does the actual JS-rendered
+  # fetching. Only starts when COMPOSE_PROFILES=playwright (the installer's
+  # default answer to "Browser rendering engine").
+  # --------------------------------------------------------------------------
+  playwright-service:
+    image: ghcr.io/firecrawl/playwright-service:latest
+    container_name: local-search-playwright
+    profiles: ["playwright"]
+    environment:
+      - PORT=3000
+      - BLOCK_MEDIA=false
+      - ALLOW_LOCAL_WEBHOOKS=false
+      - MAX_CONCURRENT_PAGES=10
+    restart: unless-stopped
+    networks:
+      - local-search-net
+
+  # --------------------------------------------------------------------------
   # Browserless (community edition) — stealth headless Chromium that does the
   # actual JS-rendered fetching for Firecrawl. DEFAULT_STEALTH=true applies
   # the built-in stealth patches (masks automation fingerprints such as
   # navigator.webdriver) to every request without needing a ?stealth query
   # param, which helps pages fronted by Cloudflare and similar bot checks.
+  # Only starts when COMPOSE_PROFILES=browserless (the installer's "Use
+  # Browserless instead?" answer).
   # --------------------------------------------------------------------------
   browserless:
     image: ghcr.io/browserless/chromium:latest
     container_name: local-search-browserless
+    profiles: ["browserless"]
     environment:
       - PORT=3000
       - TOKEN=${BROWSERLESS_TOKEN:-}
