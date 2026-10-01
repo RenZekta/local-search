@@ -1,7 +1,15 @@
 @echo off
 setlocal enableDelayedExpansion
-chcp 65001 >nul
 title Local Search - Uninstall
+REM  Prompts run on a code page other than 65001: while the console is on 65001
+REM  (UTF-8), set /p returns an empty line for redirected or piped stdin, so
+REM  scripted answers are lost. The code page the console started on is used, or
+REM  437 when it is already 65001 (chcp persists after a script ends). UTF-8 is
+REM  enabled after the last prompt.
+set "LS_PROMPT_CP=437"
+for /f "tokens=2 delims=:" %%c in ('chcp') do for /f %%n in ("%%c") do set "LS_PROMPT_CP=%%n"
+if "!LS_PROMPT_CP!"=="65001" set "LS_PROMPT_CP=437"
+chcp !LS_PROMPT_CP! >nul 2>&1
 
 cd /d "%~dp0"
 
@@ -36,6 +44,8 @@ echo.
 set "CONFIRM="
 set /p CONFIRM="Continue with uninstall? [y/N]: "
 if /i not "!CONFIRM!"=="y" ( echo Uninstall cancelled. & pause & exit /b 0 )
+REM  All prompts are answered - safe to switch to UTF-8 for the output phase.
+chcp 65001 >nul
 
 echo.
 echo Stopping and removing containers + volumes...
@@ -61,6 +71,8 @@ if exist "!SKILL_DIR!" (
   echo   Skill not found ^(already removed^) - nothing to do.
 )
 echo.
+REM  The second prompt also needs a code page other than 65001 (see top of file).
+chcp !LS_PROMPT_CP! >nul 2>&1
 set "DELFILES="
 set /p DELFILES="Also delete the install folder and ALL its files? [y/N]: "
 if /i not "!DELFILES!"=="y" (

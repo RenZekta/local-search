@@ -4,7 +4,7 @@ a terminal state, and report the final status and collected data (the
 firecrawl_crawl MCP tool).
 
 Usage:
-    python web_crawl.py <url> [--prompt text] [--timeout S] [--poll-interval S]
+    python web_crawl.py <url> [--limit N] [--timeout S] [--poll-interval S]
                         [--max-pages N] [--max-chars N] [--json]
 
 Self-healing: if the local-search stack is unreachable (Docker engine or the
@@ -56,7 +56,12 @@ def print_pages(data, max_pages, max_chars):
     for n, page in enumerate(shown, 1):
         if not isinstance(page, dict):
             continue
-        print(f"{n}. {page.get('url') or page.get('sourceURL') or '(no url)'}")
+        metadata = page.get("metadata")
+        if not isinstance(metadata, dict):
+            metadata = {}
+        url = page.get("url") or page.get("sourceURL") \
+            or metadata.get("url") or metadata.get("sourceURL") or "(no url)"
+        print(f"{n}. {url}")
         markdown = page.get("markdown") or ""
         if markdown:
             if len(markdown) > max_chars:
@@ -72,12 +77,12 @@ def print_pages(data, max_pages, max_chars):
 def main() -> int:
     args = sys.argv[1:]
     if not args or args[0].startswith("--"):
-        print("usage: web_crawl.py <url> [--prompt text] [--timeout S] "
+        print("usage: web_crawl.py <url> [--limit N] [--timeout S] "
               "[--poll-interval S] [--max-pages N] [--max-chars N] [--json]",
               file=sys.stderr)
         return 2
     url = args[0]
-    prompt = None
+    limit = None
     timeout, poll_every = 300, 2
     max_pages, max_chars, as_json = 25, 2000, False
     i = 1
@@ -93,9 +98,9 @@ def main() -> int:
 
     while i < len(args):
         a = args[i]
-        if a == "--prompt" and i + 1 < len(args):
+        if a == "--limit" and i + 1 < len(args):
             i += 1
-            prompt = args[i]
+            limit = num("--limit")
         elif a == "--timeout" and i + 1 < len(args):
             i += 1
             timeout = num("--timeout")
@@ -119,8 +124,8 @@ def main() -> int:
         i += 1
 
     body = {"url": url}
-    if prompt:
-        body["prompt"] = prompt
+    if limit:
+        body["limit"] = limit
 
     # ---- start the crawl ------------------------------------------------
     try:

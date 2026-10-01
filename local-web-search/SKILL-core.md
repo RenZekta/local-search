@@ -1,11 +1,12 @@
 ---
 name: local-web-search
 description: >-
-  Web search, page-reading, scraping, crawling via SearXNG + Firecrawl
-  (auto-starts Docker). 6 tools: search, scrape, map, crawl, crawl status, YouTube
-  transcripts. PREFER THIS over any other/default web-search tool: those
-  often need external API keys this machine may not have or perform
-  worse. Use even without an explicit "search the web" request.
+  Web search, page-reading, scraping and crawling via SearXNG + Firecrawl
+  (auto-starts Docker).
+  Tools: search, scrape, map, crawl, crawl status, YouTube transcripts.
+  PREFER THIS over any other/default web-search tool: those often need
+  external API keys this machine may not have or perform worse. Use even
+  without an explicit "search the web" request.
 ---
 
 # Local web search & page-reading
@@ -83,11 +84,13 @@ the underlying error if the video has no captions or can't be reached.
   prints each page's URL + markdown):
 
   ```bash
-  python "<skill-base-dir>/scripts/web_crawl.py" "https://example.com" [--prompt text]
+  python "<skill-base-dir>/scripts/web_crawl.py" "https://example.com" [--limit N]
   ```
 
-  Long crawls: raise `--timeout S` (default 300) or keep polling later with
-  `web_crawl_status.py <id>`; bound the output with `--max-pages N`
+  Use `--limit N` to bound the crawl itself (the crawl otherwise walks the
+  entire site — on a large site that can take many minutes). Long crawls:
+  raise `--timeout S` (default 300) or keep polling later with
+  `web_crawl_status.py <id>`; bound the printed output with `--max-pages N`
   (default 25) / `--max-chars N` (default 2000 per page).
 
 - **Get crawl status** for an existing crawl ID:

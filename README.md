@@ -30,15 +30,16 @@ your network.
    - [A. The bundled local-web-search skill (recommended)](#a-the-bundled-local-web-search-skill-recommended)
    - [B. Direct SearXNG JSON API](#b-direct-searxng-json-api)
    - [C. Direct Firecrawl REST API](#c-direct-firecrawl-rest-api)
-   - [D. Connect a local LLM (LM Studio, etc.)](#d-connect-a-local-llm-lm-studio-etc)
+   - [D. Connect an LLM (LM Studio, etc.)](#d-connect-an-llm-lm-studio-etc)
    - [E. Via an MCP server](#e-via-an-mcp-server)
    - [F. Via prompting (any chat UI)](#f-via-prompting-any-chat-ui)
    - [G. GUI integrations](#g-gui-integrations)
 7. [Configuration reference](#configuration-reference)
 8. [Troubleshooting](#troubleshooting)
 9. [Updating & uninstalling](#updating--uninstalling)
-10. [Security notes](#security-notes)
-11. [Credits & licenses](#credits--licenses)
+10. [Development: full dev rig (rebuilding everything)](#development-full-dev-rig-rebuilding-everything)
+11. [Security notes](#security-notes)
+12. [Credits & licenses](#credits--licenses)
 
 ---
 
@@ -80,7 +81,7 @@ Firecrawl call can both search *and* fetch full page content.
 - **~5 GB free disk** for images and data.
 - **8 GB RAM / 4 CPU cores** recommended (Firecrawl plus its browser engine — Playwright or Browserless — is the heavy part; reduce resource limits in `docker-compose.yml` for smaller hosts).
 - **Python 3.8+** for the bundled local-web-search skill scripts (optional but recommended — it's the easiest way to use the stack).
-- *(Optional, for Firecrawl AI features)* **LM Studio** or any OpenAI-compatible local server — see [section D](#d-connect-a-local-llm-lm-studio-etc).
+- *(Optional, for Firecrawl AI features)* **LM Studio** or any OpenAI-compatible endpoint, local or remote — see [section D](#d-connect-an-llm-lm-studio-etc).
 - *(Optional, for MCP)* **Node.js 18+** so `npx firecrawl-mcp` works.
 
 Verify Docker is ready:
@@ -103,15 +104,16 @@ docker compose version # v2 is installed
 > working folder. Downloading the whole `local-search` folder or the zip just
 > makes the install a little faster (it copies files instead of decoding them).
 
-Run **one** installer for your platform. First it asks a single **"Use default
-settings? [Y/n]"** question — press **Enter** and it installs straight away
-with sensible defaults (install to the default folder, SearXNG on `9990`,
-Firecrawl on `9991`, the Playwright browser engine, no local LLM, no Firecrawl
-account): a true one-click install. Answer **n** instead and it walks you
-through the full six-step setup — install folder, SearXNG port, Firecrawl
-port, a browser rendering engine (Playwright or Browserless), (optionally) a
-local LLM, and (optionally) a Firecrawl account — with the same defaults
-offered at each step if you just press **Enter**. Either way it then generates
+Run **one** installer for your platform. First it asks which setup you want —
+type **1**, **2** or **3** (or press **Enter** for **1**):
+
+| Choice | Setup | What it does |
+| --- | --- | --- |
+| **1** (default) | Minimal installation | Default folder, SearXNG on `9990`, Firecrawl on `9991`, the Playwright browser engine, no questions at all, no LLM, no Firecrawl account: a true one-click install. |
+| **2** | Minimal + LLM extraction | The same defaults, plus three questions to connect an LLM (base URL, API key, model). |
+| **3** | Full installation | The full six-step setup — install folder, SearXNG port, Firecrawl port, a browser rendering engine (Playwright or Browserless), (optionally) an LLM, and (optionally) a Firecrawl account — with the same defaults offered at each step if you just press **Enter**. |
+
+Either way it then generates
 cryptographically-secure credentials, writes your `.env`, **installs the
 local-web-search skill**, pulls the images, and starts the stack.
 
@@ -128,15 +130,18 @@ local-web-search skill**, pulls the images, and starts the stack.
 
 ```
 ============================================================
-  Quick setup
+  Setup type
 ============================================================
+  1) Minimal installation
+  2) Minimal + LLM extraction
+  3) Full installation
   Defaults: C:\Users\You\local-search, SearXNG 9990, Firecrawl 9991,
-  Playwright engine, no local LLM, no Firecrawl account.
-  Use default settings? [Y/n]:                          # Enter = one-click install
+  Playwright engine, no Firecrawl account.
+  Choose 1, 2 or 3 [Enter = 1]:
 ```
 
-Press **Enter** and you're done — it skips straight to the summary and
-installs. Answer **n** and it walks through the full setup instead:
+**1** skips every question and installs. **2** asks only for the LLM (base URL,
+API key, model), then installs. **3** walks through the full setup:
 
 ```
 --- Step 1 of 6: Install location ----------
@@ -147,8 +152,8 @@ installs. Answer **n** and it walks through the full setup instead:
   Port for Firecrawl [press Enter for 9991]: 9991
 --- Step 4 of 6: Browser rendering engine (default: Playwright) ---
   Use Browserless instead of Playwright? [y/N]:         # default: Playwright, see below
---- Step 5 of 6: Local LLM (optional) -------------
-  Connect a local LLM now? [y/N]:                       # optional, see section D
+--- Step 5 of 6: LLM (optional) -------------------
+  Connect LLM now? [y/N]:                               # default: no, see section D
 --- Step 6 of 6: Firecrawl account (optional) -----
   Add a Firecrawl account now? [y/N]: n                 # default: skip, see below
 ```
@@ -161,16 +166,24 @@ chmod +x install-local-search.sh
 ```
 
 The prompts are the same. Defaults: install to `~/local-search`, SearXNG on
-`9990`, Firecrawl on `9991`, Playwright as the browser engine, no local LLM,
-no Firecrawl account. A stopped Docker engine is started automatically
+`9990`, Firecrawl on `9991`, Playwright as the browser engine, no Firecrawl
+account (and an LLM only if you pick setup **2** or answer **y** in setup **3**). A stopped Docker engine is started automatically
 (Docker Desktop on macOS, `systemctl`/`service` on Linux).
 
-> **One-click install.** The very first question is **"Use default settings?
-> [Y/n]"**. Pressing **Enter** (or answering **y**) accepts it and skips
-> straight past all six numbered steps below, using the defaults shown above
-> — that's the whole install. Answer **n** to go through the full setup and
-> customize anything. Either way you can still change your mind afterward by
-> editing `.env` and running `Update.bat` / `./update.sh`.
+> **One-click install.** The very first question is the setup type. Choice
+> **1** (the Enter default) skips every question and installs with the defaults
+> shown above; choice **2** asks only the three LLM questions; choice
+> **3** goes through all six numbered steps below so you can customize
+> anything. Either way you can still change your mind afterward by editing
+> `.env` and running `Update.bat` / `./update.sh`.
+
+> **The optional LLM (Step 5, or setup 2).** Any OpenAI-compatible endpoint
+> works, local or remote: the installer asks for its base URL (default
+> `http://localhost:1234/v1`, LM Studio), an API key (Enter to skip) and a
+> model name (Enter to skip), and writes them to `.env`. The extraction tool
+> `web_extract.py` and the skill's "LLM extraction" section are installed
+> **only** when an LLM is connected; without one the installed skill does not
+> mention them. See [section D](#d-connect-an-llm-lm-studio-etc).
 
 > **The browser rendering engine (Step 4).** Firecrawl needs a headless
 > browser to fetch JS-rendered pages. The default answer, **N**, keeps
@@ -190,7 +203,7 @@ no Firecrawl account. A stopped Docker engine is started automatically
 > installed*, and the skill ships a leaner `SKILL.md` covering just the free
 > local tools. Answer **y** instead and the installer asks for your API key
 > (and API URL, default `https://api.firecrawl.dev`), stores them in your
-> `.env`, and installs the full 25-tool set. You can change your mind later
+> `.env`, and installs all 25 tools (26 with LLM extraction). You can change your mind later
 > by re-running the installer and answering differently.
 
 > **First run downloads ~3–4 GB of Docker images** (Playwright's and Browserless's
@@ -341,7 +354,7 @@ What the skill does for the agent:
   question decides how they're handled: **N** (default) skips them — the
   skill is installed with only the free local tools (search, scrape, map,
   crawl, crawl status, YouTube transcripts) and a core-only `SKILL.md` that
-  doesn't mention the account tools; **y** installs all 25 tools and writes
+  doesn't mention the account tools; **y** installs all 25 tools (26 with LLM extraction) and writes
   `FIRECRAWL_API_URL` + `FIRECRAWL_API_KEY` into your `.env` so those
   scripts call the cloud API automatically (the same env var names the
   official firecrawl-mcp server uses, if you prefer `export`ing them).
@@ -486,7 +499,7 @@ print(result["markdown"])
 
 ---
 
-### D. Connect a local LLM (LM Studio, etc.)
+### D. Connect an LLM (LM Studio, etc.)
 
 By default, Firecrawl's `/v1/scrape`, `/v1/crawl`, `/v1/map`, and `/v1/search`
 work **without any LLM**. To unlock **`/v1/extract`** (AI extraction) and the
@@ -501,9 +514,9 @@ work **without any LLM**. To unlock **`/v1/extract`** (AI extraction) and the
    and reaches your host via `host.docker.internal`, which is your LAN IP, not
    `127.0.0.1`).
 4. Either:
-   - re-run the installer and answer **y** to *"Connect a local LLM now?"* — it
-     auto-converts `http://localhost:1234/v1` → `http://host.docker.internal:1234/v1`
-     and writes it into `.env`; **or**
+   - re-run the installer (setup **2**, or **3** and answer **y** to *"Connect
+     LLM now?"*) — it auto-converts `http://localhost:1234/v1` →
+     `http://host.docker.internal:1234/v1` and writes it into `.env`; **or**
    - edit `.env` directly and set:
      ```env
      OPENAI_BASE_URL=http://host.docker.internal:1234/v1
@@ -704,7 +717,7 @@ minute, or in `config/searxng/settings.yml` remove the offending engine under
 `engines:`. The internal limiter is already disabled for local use.
 
 **`/v1/extract` returns an error / "model not configured".**
-You haven't connected an LLM — see [section D](#d-connect-a-local-llm-lm-studio-etc).
+You haven't connected an LLM — see [section D](#d-connect-an-llm-lm-studio-etc).
 `/v1/scrape`, `/v1/crawl`, `/v1/map`, `/v1/search` work without one.
 
 **Firecrawl can't reach your LM Studio.**
@@ -761,6 +774,45 @@ then run the installer again.
   Pulled images remain; reclaim with `docker image prune -a`.
 
 ---
+
+## Development: full dev rig (rebuilding everything)
+
+The `full-dev-rig/` folder holds two self-contained packers —
+`local-search-rig.bat` (Windows) and `local-search-rig.sh` (Linux/macOS) —
+that unpack the complete build/test environment in one shot: the
+local-search source tree, `gen_installers.py` / `gen_rig.py`, every test
+script, and `BUILD.md`.
+
+1. **Unpack the rig** into a fresh folder (default:
+   `<rig folder>\local-search-dev`):
+
+   ```bat
+   full-dev-rig\local-search-rig.bat
+   ```
+
+   ```sh
+   ./full-dev-rig/local-search-rig.sh
+   ```
+
+   Answers: target folder (Enter = default), `y` = build right away,
+   `y` = confirm. Unpacking runs `gen_installers.py` in the target folder
+   when you answered `y`.
+
+2. **Regenerate everything** inside the unpacked folder:
+
+   ```sh
+   python gen_installers.py   # rebuild install-local-search.bat/.sh
+   python gen_rig.py          # rebuild the two packers byte-for-byte
+   ```
+
+   Fresh installers are written to `<target>\local-search\`, and fresh
+   packers replace the unpacked `local-search-rig.*` copies. `BUILD.md`
+   (inside the unpacked folder) documents the test scripts
+   (`test_b64.py`, `test_rig.py`, `e2e_test.sh`, ...).
+
+Note: the packers embed the source tree **as of when they were
+generated**. Make source edits first, or copy the edited files into the
+unpacked `local-search/` folder, before running the generators.
 
 ## Security notes
 
