@@ -144,7 +144,7 @@ def auth_headers():
 
 
 def _selfheal():
-    """Start the Docker engine + the containers if they are down (the same
+    """Start the container engine + the containers if they are down (the same
     logic as ensure_stack.py). Import is deferred so the fast path (stack
     already up) pays nothing. Returns (ok, message)."""
     try:
@@ -187,7 +187,8 @@ def _hint_for_status(status):
     if status in RETRY_STATUSES:
         return ("The Firecrawl service answered with a server error. Wait a "
                 "moment and retry; if it persists, inspect the stack with: "
-                "cd <install folder> && docker compose logs --tail 50 firecrawl")
+                "cd <install folder> && docker compose logs --tail 50 firecrawl "
+                "(or `podman compose logs ...` if the stack runs on Podman)")
     return None
 
 
@@ -262,7 +263,7 @@ def call(path, method="GET", body=None, query=None, timeout=TIMEOUT):
                 if not ok:
                     raise FcError(
                         "the local-search stack could not be started: " + message
-                        + " Resolve the stack (or ask the user to start Docker "
+                        + " Resolve the stack (or ask the user to start Podman/Docker "
                           "Desktop) and retry — do NOT fall back to other web "
                           "tools unless the user asks.") from e
                 continue

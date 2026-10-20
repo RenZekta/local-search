@@ -75,20 +75,23 @@ Firecrawl call can both search *and* fetch full page content.
 
 ## Requirements
 
-- **Docker** with the **Compose v2 plugin** (`docker compose`).
-  - Windows / macOS: [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-  - Linux: [Docker Engine](https://docs.docker.com/engine/install/) + the `docker-compose-plugin` package. Add your user to the `docker` group so you don't need `sudo`.
+- **Docker** with the **Compose v2 plugin** (`docker compose`) — **or Podman** (Linux/macOS) with a compose provider.
+  - Windows: [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+  - macOS: [Docker Desktop](https://www.docker.com/products/docker-desktop/), or Podman (`brew install podman docker-compose`, then `podman machine init && podman machine start`)
+  - Linux, Docker: [Docker Engine](https://docs.docker.com/engine/install/) + the `docker-compose-plugin` package. Add your user to the `docker` group so you don't need `sudo`.
+  - Linux, Podman (Fedora / RHEL / Debian / Ubuntu): `sudo dnf install podman docker-compose` (Debian/Ubuntu: `sudo apt install podman docker-compose-v2`). Both compose providers work — Compose v2 (`docker-compose`) and `podman-compose` (tested with 1.6.0). Rootless is fine.
+  - **If both Podman and Docker are installed, the Linux/macOS installer uses Podman.** Force the other one with `LOCAL_SEARCH_ENGINE=docker ./install-local-search.sh`. The installer records its choice in `.env` (`LOCAL_SEARCH_ENGINE`) so `run.sh` / `update.sh` keep using the same engine. The Windows installer uses Docker Desktop.
 - **~5 GB free disk** for images and data.
 - **8 GB RAM / 4 CPU cores** recommended (Firecrawl plus its browser engine — Playwright or Browserless — is the heavy part; reduce resource limits in `docker-compose.yml` for smaller hosts).
 - **Python 3.8+** for the bundled local-web-search skill scripts (optional but recommended — it's the easiest way to use the stack).
 - *(Optional, for Firecrawl AI features)* **LM Studio** or any OpenAI-compatible endpoint, local or remote — see [section D](#d-connect-an-llm-lm-studio-etc).
 - *(Optional, for MCP)* **Node.js 18+** so `npx firecrawl-mcp` works.
 
-Verify Docker is ready:
+Verify your engine is ready:
 
 ```bash
-docker info            # engine is running
-docker compose version # v2 is installed
+docker info            # engine is running        (Podman: podman info)
+docker compose version # v2 is installed         (Podman: podman compose version)
 ```
 
 ---
@@ -117,11 +120,12 @@ Either way it then generates
 cryptographically-secure credentials, writes your `.env`, **installs the
 local-web-search skill**, pulls the images, and starts the stack.
 
-> **Docker isn't running?** No problem — the installer starts it for you: it
-> launches Docker Desktop (Windows/macOS) or the Docker service
-> (`systemctl`/`service`, Linux) and waits up to 5 minutes for the engine while
-> you answer the prompts. (Override the wait with the
-> `LOCAL_SEARCH_DOCKER_TIMEOUT` env var, in seconds.)
+> **Engine isn't running?** No problem — the installer starts it for you: it
+> launches Docker Desktop (Windows/macOS), the Docker service
+> (`systemctl`/`service`, Linux) or the Podman machine (macOS) and waits up to
+> 5 minutes for the engine while you answer the prompts. (Override the wait with
+> the `LOCAL_SEARCH_DOCKER_TIMEOUT` env var, in seconds.) Rootless Podman on
+> Linux has no daemon to start.
 
 ### Windows
 
@@ -167,8 +171,17 @@ chmod +x install-local-search.sh
 
 The prompts are the same. Defaults: install to `~/local-search`, SearXNG on
 `9990`, Firecrawl on `9991`, Playwright as the browser engine, no Firecrawl
-account (and an LLM only if you pick setup **2** or answer **y** in setup **3**). A stopped Docker engine is started automatically
-(Docker Desktop on macOS, `systemctl`/`service` on Linux).
+account (and an LLM only if you pick setup **2** or answer **y** in setup **3**). A stopped engine is started automatically
+(Docker Desktop / Podman machine on macOS, `systemctl`/`service` on Linux).
+
+The installer **prefers Podman** when it is installed (even if Docker is too),
+pulls every image only from **Docker Hub (`docker.io`) and GHCR (`ghcr.io`)** —
+the compose file uses fully-qualified names, so Podman never asks which registry
+to use — and, once the stack is up, **checks that SearXNG really answers**,
+printing its container state and last log lines when it does not. On
+SELinux hosts (Fedora, RHEL, …) and with rootless Podman it also sets how
+SearXNG's config folder is mounted (see `SEARXNG_MOUNT_OPTS` /
+`SEARXNG_FORCE_OWNERSHIP` below).
 
 > **One-click install.** The very first question is the setup type. Choice
 > **1** (the Enter default) skips every question and installs with the defaults
@@ -241,7 +254,7 @@ double-clicking or `./`-ing them.
 
 - **Stop** only removes containers; your data volumes (Firecrawl job state,
   redis cache, rabbitmq/postgres data) are preserved.
-- **Update** runs `docker compose pull` then `docker compose up -d`, so it
+- **Update** runs `docker compose pull` then `docker compose up -d` (`podman compose …` on Podman), so it
   both upgrades images **and** applies any port/LLM edits you made to `.env`;
   it also re-copies the bundled `local-web-search` skill into `~/.agents/skills/`.
 - **Uninstall** runs `docker compose down -v` (deletes volumes + data),
@@ -331,11 +344,14 @@ What the skill does for the agent:
   `--categories it,news,general` options.
 - **Reads pages.** `web_scrape.py <url>` returns the page as clean Markdown
   (truncated at 20,000 chars; raise with `--max-chars`).
-- **Reads YouTube transcripts.** `web_youtube_transcript.py <video_id>`
+- **Reads YouTube transcripts.** `web_youtube_transcript.py <video_id | url> [--lang en,de]`
   prints a video's captions as `[MM:SS] text` lines. It talks directly to
-  YouTube — no Docker stack, no self-heal, no account needed — via the
-  `youtube-transcript-api` pip package (`pip install youtube-transcript-api`;
-  the only tool here with a pip dependency).
+  YouTube — no Docker stack, no self-heal, no account needed — through
+  **yt-dlp** (`pip install -U "yt-dlp[default]"`, plus Deno or Node.js 22+ on
+  `PATH`). YouTube now guards the captions of a growing share of videos with a
+  "PO token" that plain scrapers such as `youtube-transcript-api` cannot produce
+  (they get an empty answer); yt-dlp can. The older package is kept only as a
+  fallback for videos that are not behind the token yet.
 - **Exposes the full Firecrawl MCP surface — 24 tools.** Besides search and
   scrape, the skill ships scripts mirroring every Firecrawl MCP tool:
   `web_map.py` (enumerate a site's URLs), `web_crawl.py` /
@@ -379,8 +395,8 @@ re-running the installer overwrites it. Uninstalling removes it.
 
 > The skill only needs **Python 3.8+** on the host — no API keys, no MCP
 > support required from the agent. Every tool is stdlib-only except
-> `web_youtube_transcript.py`, which needs one pip package
-> (`pip install youtube-transcript-api`).
+> `web_youtube_transcript.py`, which needs **yt-dlp**
+> (`pip install -U "yt-dlp[default]"`) and a JavaScript runtime (Deno or Node.js 22+).
 
 ---
 
@@ -674,6 +690,10 @@ installer; documented in `.env.example`). Edit it, then run `Update.bat` /
 | `SEARXNG_PORT` | `9990` | Host port for the SearXNG UI + JSON API. |
 | `FIRECRAWL_PORT` | `9991` | Host port for the Firecrawl API. |
 | `SEARXNG_SECRET` | *(random)* | SearXNG session secret — also injected into `config/searxng/settings.yml`. |
+| `LOCAL_SEARCH_ENGINE` | *(set by the installer)* | `podman` or `docker`: the container engine `run.sh` / `stop.sh` / `update.sh` / `uninstall.sh` and the skill use. Without it: Podman if installed, else Docker. An environment variable of the same name overrides it. |
+| `SEARXNG_MOUNT_OPTS` | *(empty; `,z` on SELinux hosts)* | Extra bind-mount options for SearXNG's `config/searxng` folder. `,z` relabels it so the container can read it on Fedora/RHEL; without that, SearXNG restart-loops with `Permission denied`. |
+| `LOCAL_SEARCH_PAUSE` *(environment)* | `auto` | `auto`: the Linux/macOS scripts wait for a key press before closing when a launcher (file manager, desktop icon) opened their terminal window; `0` never waits, `1` always waits. |
+| `SEARXNG_FORCE_OWNERSHIP` | `true` *(`false` on rootless Podman)* | Whether SearXNG's entrypoint re-owns the mounted config folder. `false` keeps the files yours under rootless Podman. |
 | `BULL_AUTH_KEY` | *(random)* | Protects the (disabled-by-default) Firecrawl queue admin UI. |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | `firecrawl` / `firecrawl` / *(random)* | Firecrawl job-state DB credentials. |
 | `RABBITMQ_USER` / `RABBITMQ_PASSWORD` | `firecrawl` / *(random)* | Firecrawl message-broker credentials. |
@@ -701,7 +721,52 @@ skill at a different folder, set the `LOCAL_SEARCH_DIR` environment variable.
 
 ## Troubleshooting
 
-**The installer says the Docker engine "did not come online".**
+**SearXNG restart-loops with `chown: /etc/searxng: Permission denied`, `cp: can't stat '/etc/searxng/settings.yml'`, `"/etc/searxng/settings.yml" is not a valid file, exiting...` (Fedora / RHEL).**
+SELinux is blocking the container from reading the bind-mounted `config/searxng`
+folder. The installer fixes this by writing `SEARXNG_MOUNT_OPTS=,z` to `.env`
+(the compose file appends it to the mount). Check with `grep SEARXNG .env` and
+`getenforce`, then run `./run.sh`. If you set the stack up with an older
+installer, re-run the current one. On a filesystem that cannot be relabelled
+(NFS, FAT/NTFS), install to a local ext4/xfs/btrfs folder instead.
+If you start SearXNG by hand rather than through this stack, add `:z` to the
+`-v` option, e.g. `-v ./config/searxng:/etc/searxng:z`.
+
+**Searches are empty and SearXNG's log says `Failed to connect to ... over proxy 127.0.0.1 after 0 ms`.**
+Podman copies the proxy variables of the shell that started it (`http_proxy`,
+`https_proxy`, …) into every container — Docker does not. A value like
+`http://127.0.0.1:7890` (typical with a local proxy/VPN tool) points at the
+*container itself* there, so every outgoing request fails instantly. The
+installer, `run.sh` and `update.sh` look at what the containers actually received
+and, if a proxy variable points at `localhost`/`127.x`/`::1`, blank exactly those
+variables through a generated `docker-compose.override.yml`. Proxies that point at
+a real host (corporate, LAN) are left alone. To stop inheriting them at all, run
+`unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY` before
+`./run.sh`.
+
+**SearXNG logs `WARNING "/etc/searxng" directory is not owned by "searxng:searxng"`.**
+Harmless and expected with rootless Podman: the installer sets
+`SEARXNG_FORCE_OWNERSHIP=false` so SearXNG does not re-own your config folder
+(which would lock *you* out of editing it). SearXNG reads the files fine.
+
+**The installer window closes immediately when I start it from the file manager.**
+It now waits for a key press before closing whenever a launcher (not an
+interactive shell) opened the terminal, so the output stays readable — also for `run.sh`,
+`stop.sh`, `update.sh` and `uninstall.sh`. `LOCAL_SEARCH_PAUSE=0` turns it off.
+
+**`podman compose` fails with "Cannot connect to the Docker daemon ... podman.sock".**
+The Compose v2 provider talks to Podman's API socket. The installer tries to
+start it; if that is not possible (no systemd), run
+`systemctl --user enable --now podman.socket` (rootful: `sudo systemctl enable --now podman.socket`).
+
+**"No compose provider was found for Podman".**
+Install one: `sudo dnf install docker-compose` (or `podman-compose`;
+Debian/Ubuntu: `sudo apt install docker-compose-v2`).
+
+**Both Podman and Docker are installed and I want Docker.**
+`LOCAL_SEARCH_ENGINE=docker ./install-local-search.sh` — it is recorded in
+`.env`, so the other scripts follow. (Podman is used only when you do not choose.)
+
+**The installer says the container engine "did not come online".**
 The installer launches Docker Desktop / the docker service when the engine is
 down, then waits up to 5 minutes (override with the `LOCAL_SEARCH_DOCKER_TIMEOUT`
 env var, in seconds). If it times out, start Docker yourself, wait until it

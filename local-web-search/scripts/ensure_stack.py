@@ -6,7 +6,7 @@ Two ways to use it:
   1. As a CLI pre-flight check (OPTIONAL — the other scripts self-heal):
          python ensure_stack.py [--check]
      Exit codes: 0 ready, 1 down / could not be brought up, 2 prerequisites
-     missing (no install folder, no Docker, no compose).
+     missing (no install folder, no Podman/Docker, no compose).
 
   2. As a module (used by web_search.py / web_scrape.py for self-healing):
          import ensure_stack
@@ -17,11 +17,14 @@ Two ways to use it:
 
 Behaviour (both CLI and module):
   * Both endpoints answering -> return immediately (fast path, < 1 s).
-  * Otherwise: make sure the Docker engine is running (if it is down, launch
-    Docker Desktop / the docker service and wait for the daemon), then start
-    the containers with `docker compose up -d` in the install folder (the
-    same command Run.bat / run.sh run, without the interactive `pause`) and
-    wait until both endpoints answer again.
+  * Otherwise: make sure the container engine is running (if it is down, launch
+    Docker Desktop / the docker service / the Podman machine and wait for it),
+    then start the containers with `podman compose up -d` / `docker compose
+    up -d` in the install folder (the same command Run.bat / run.sh run,
+    without the interactive `pause`) and wait until both endpoints answer.
+    The engine is Podman when it is installed (it wins when both are), else
+    Docker - override with LOCAL_SEARCH_ENGINE=podman|docker, or the same line
+    in the install folder's .env (the installer records its choice there).
     The stack is NEVER stopped by this script.
 
 The readiness timeout defaults to 240 s and can be overridden with the
@@ -90,27 +93,61 @@ def ready_message(endpoints):
         port_of(endpoints["searxng"]), port_of(endpoints["firecrawl"]))
 
 
-def compose_command():
-    if shutil.which("docker"):
-        rc = subprocess.run(
-            ["docker", "compose", "version"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-        if rc.returncode == 0:
-            return ["docker", "compose"]
+def _ok(cmd):
+    try:
+        return subprocess.run(cmd, stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL).returncode == 0
+    except (OSError, FileNotFoundError):
+        return False
+
+
+def compose_command(engine="docker"):
+    if engine == "podman":
+        if shutil.which("podman") and _ok(["podman", "compose", "version"]):
+            return ["podman", "compose"]
+        if shutil.which("podman-compose"):
+            return ["podman-compose"]
+        return None
+    if shutil.which("docker") and _ok(["docker", "compose", "version"]):
+        return ["docker", "compose"]
     if shutil.which("docker-compose"):
         return ["docker-compose"]
     return None
 
 
-def docker_engine_up():
-    try:
-        return subprocess.run(
-            ["docker", "info"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        ).returncode == 0
-    except (OSError, FileNotFoundError):
-        return False
+def engine_up(engine):
+    return _ok([engine, "info"])
+
+
+def ensure_podman_socket():
+    """`podman compose` normally hands over to docker-compose, which talks to
+    Podman's API socket; on a fresh Fedora session that socket is not running.
+    Best effort, Linux only, never fatal. True when the socket exists."""
+    import platform
+    if platform.system() != "Linux":
+        return True
+
+    def exists():
+        try:
+            out = subprocess.run(
+                ["podman", "info", "--format", "{{.Host.RemoteSocket.Exists}}"],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            return out.stdout.strip() == "true"
+        except (OSError, FileNotFoundError):
+            return False
+
+    if exists():
+        return True
+    if shutil.which("systemctl"):
+        rootless = subprocess.run(
+            ["podman", "info", "--format", "{{.Host.Security.Rootless}}"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
+        ).stdout.strip() == "true"
+        if rootless:
+            _ok(["systemctl", "--user", "start", "podman.socket"])
+        elif not _ok(["systemctl", "start", "podman.socket"]) and shutil.which("sudo"):
+            _ok(["sudo", "-n", "systemctl", "start", "podman.socket"])
+    return exists()
 
 
 def find_docker_desktop_exe():
@@ -124,11 +161,27 @@ def find_docker_desktop_exe():
     return None
 
 
-def start_docker_engine():
-    """Try to launch the Docker engine for this OS. True if the launch was
+def start_engine(engine):
+    """Try to launch the container engine for this OS. True if the launch was
     initiated (not that it became ready — that's wait_for_engine's job)."""
     import platform
     system = platform.system()
+    if engine == "podman":
+        # Linux: rootless Podman has no daemon - nothing to start. macOS /
+        # Windows: Podman runs in a VM ("podman machine") that must be started.
+        if system == "Linux":
+            return False
+        try:
+            names = subprocess.run(
+                ["podman", "machine", "list", "--format", "{{.Name}}"],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            if not names.stdout.strip():
+                return False
+            subprocess.Popen(["podman", "machine", "start"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return True
+        except OSError:
+            return False
     if system == "Windows":
         exe = find_docker_desktop_exe()
         if not exe:
@@ -159,10 +212,10 @@ def start_docker_engine():
         return False
 
 
-def wait_for_engine(timeout=180):
+def wait_for_engine(engine, timeout=180):
     deadline = time.time() + timeout
     while time.time() < deadline:
-        if docker_engine_up():
+        if engine_up(engine):
             return True
         time.sleep(3)
     return False
@@ -195,17 +248,29 @@ def ensure_ready(check_only=False, ready_timeout=None, poll_every=None):
     if check_only:
         return False, "Stack is down (--check: nothing was started).", 1
 
-    if not docker_engine_up():
-        print("Docker engine is not running — trying to start it ...",
+    engine, auto = config.engine_choice(config.find_install_dir())
+    if engine is None:
+        return False, ("No container engine found: neither Podman nor Docker is "
+                       "on PATH (or LOCAL_SEARCH_ENGINE names one that is not "
+                       "installed). Install one, then re-run this script."), 2
+    name = engine.capitalize()
+
+    if not engine_up(engine):
+        print(f"{name} engine is not running — trying to start it ...",
               file=sys.stderr)
-        if not start_docker_engine():
-            return False, ("Could not start the Docker engine automatically "
-                           "(Docker Desktop not found in the usual locations?). "
+        if start_engine(engine):
+            print(f"Waiting for the {name} engine to come up ...", file=sys.stderr)
+            if not wait_for_engine(engine, timeout=180):
+                return False, (f"The {name} engine was launched but did not answer "
+                               f"within 180 s. Check {name}, then re-run this script."), 2
+        elif auto and engine == "podman" and shutil.which("docker") and engine_up("docker"):
+            print("Podman is not responding — using Docker instead.", file=sys.stderr)
+            engine, name = "docker", "Docker"
+        else:
+            return False, (f"Could not start the {name} engine automatically "
+                           "(Docker Desktop not found in the usual locations? "
+                           "Is rootless Podman set up — does 'podman info' work?). "
                            "Start it manually, then re-run this script."), 2
-        print("Waiting for the Docker engine to come up ...", file=sys.stderr)
-        if not wait_for_engine(timeout=180):
-            return False, ("The Docker engine was launched but did not answer within "
-                           "180 s. Check Docker Desktop, then re-run this script."), 2
 
     # Recomputed now that the engine is up: the compose-label lookup (which
     # needs the engine) can find the install dir where the other methods
@@ -218,14 +283,25 @@ def ensure_ready(check_only=False, ready_timeout=None, poll_every=None):
                        "LOCAL_SEARCH_DIR set to that path, or start the stack manually "
                        "(Run.bat / run.sh)."), 2
 
-    compose = compose_command()
+    compose = compose_command(engine)
     if not compose:
+        if engine == "podman":
+            return False, ("No compose provider for Podman: install 'docker-compose' "
+                           "(Compose v2) or 'podman-compose'."), 2
         return False, "Neither 'docker compose' nor 'docker-compose' is available.", 2
+    compose_label = " ".join(compose)
 
-    print(f"Starting stack in {install_dir} ...", file=sys.stderr)
-    proc = subprocess.run(compose + ["up", "-d"], cwd=install_dir)
+    env = dict(os.environ)
+    if engine == "podman":
+        env["PODMAN_COMPOSE_WARNING_LOGS"] = "false"
+        if compose == ["podman", "compose"] and not ensure_podman_socket():
+            print("Podman's API socket is not active; if compose fails, run: "
+                  "systemctl --user enable --now podman.socket", file=sys.stderr)
+
+    print(f"Starting stack in {install_dir} ({compose_label}) ...", file=sys.stderr)
+    proc = subprocess.run(compose + ["up", "-d"], cwd=install_dir, env=env)
     if proc.returncode != 0:
-        return False, "'docker compose up -d' failed — see output above.", 1
+        return False, f"'{compose_label} up -d' failed — see output above.", 1
 
     print("Waiting for endpoints ...", file=sys.stderr)
     deadline = time.time() + ready_timeout
@@ -239,11 +315,11 @@ def ensure_ready(check_only=False, ready_timeout=None, poll_every=None):
         mark = "OK  " if st[name] else "DOWN"
         print(f"  [{mark}] {DISPLAY[name]} :{port_of(url)}", file=sys.stderr)
     return False, (f"Stack did not become ready within {ready_timeout}s. Inspect with:\n"
-                   f"    cd {install_dir} && docker compose logs --tail 50"), 1
+                   f"    cd {install_dir} && {compose_label} logs --tail 50"), 1
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Ensure the local-search Docker stack is running.")
+    ap = argparse.ArgumentParser(description="Ensure the local-search container stack is running.")
     ap.add_argument("--check", action="store_true",
                     help="only report status; never start anything")
     args = ap.parse_args()

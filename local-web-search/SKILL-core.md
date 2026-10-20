@@ -57,20 +57,27 @@ Optional manual pre-flight/status check, never required:
 ## YouTube transcripts
 
 Unlike every other tool here, this one does **not** touch the local
-Docker stack — it talks directly to YouTube via the `youtube-transcript-api`
-pip package, so there's nothing to self-heal and no warm-up needed. It's
-the one tool in this skill with a pip dependency (everything else is
-stdlib-only):
+container stack — it talks directly to YouTube through **yt-dlp**, so there's
+nothing to self-heal and no warm-up needed. It's the one tool in this skill
+with a pip dependency (everything else is stdlib-only), and it also needs a
+JavaScript runtime (Deno or Node.js 22+) on `PATH` because YouTube requires
+one now:
 
 ```bash
-pip install youtube-transcript-api   # one-time, if not already installed
-python "<skill-base-dir>/scripts/web_youtube_transcript.py" "<video_id>"
+pip install -U "yt-dlp[default]"   # one-time (includes yt-dlp-ejs)
+python "<skill-base-dir>/scripts/web_youtube_transcript.py" "<video_id or URL>" [--lang en,de]
 ```
 
-Prints each caption line as `[MM:SS] text`. Takes a bare video ID (the
-`v=` value from the URL, or the part after `youtu.be/`). Fails clearly
-(with the install command) if the package isn't installed, and reports
-the underlying error if the video has no captions or can't be reached.
+Prints each caption line as `[MM:SS] text`. Takes a bare video ID (the `v=`
+value from the URL, or the part after `youtu.be/`) or a full URL; `--lang`
+picks the caption language(s), default `en` (auto-generated captions count).
+YouTube protects many videos' captions with a "PO token" that older scrapers
+(`youtube-transcript-api`) cannot get — they receive an empty answer — which is
+why yt-dlp is the engine; the old package is only used as a fallback when yt-dlp
+is missing or fails. On failure the script says why (bot check, no captions
+plus the languages that do exist, missing JavaScript runtime, …). If it fails
+for every video, update first: `pip install -U "yt-dlp[default]"` — YouTube
+changes often and yt-dlp follows within days.
 
 ## Map & crawl — discover and collect site content
 

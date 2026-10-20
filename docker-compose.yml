@@ -21,6 +21,15 @@
 #
 #  Only the two host ports below are published. Everything else stays on the
 #  private "local-search-net" bridge network.
+#
+#  Works with Docker AND Podman (the Linux/macOS installer prefers Podman when
+#  both are installed). Two things make that safe:
+#    * Every image is fully qualified (docker.io/..., ghcr.io/...), so Podman
+#      never has to guess a registry or ask "which one?" for a short name -
+#      images only ever come from Docker Hub and GHCR.
+#    * SearXNG's bind-mounted config folder is tuned from .env (written by
+#      install-local-search.sh) - see the SEARXNG_MOUNT_OPTS /
+#      SEARXNG_FORCE_OWNERSHIP notes on the searxng service.
 # =============================================================================
 
 name: local-search
@@ -32,17 +41,27 @@ services:
   # Powers both your AI models (direct JSON queries) and Firecrawl's /v1/search.
   # --------------------------------------------------------------------------
   searxng:
-    image: searxng/searxng:latest
+    image: docker.io/searxng/searxng:latest
     container_name: local-search-searxng
     ports:
       - "${SEARXNG_PORT:-9990}:8080"
+    # SEARXNG_MOUNT_OPTS (from .env) appends extra bind-mount options. On hosts
+    # with SELinux (Fedora, RHEL, ...) the installer sets it to ",z" so the
+    # container may read /etc/searxng; without that label SearXNG dies at
+    # start-up with "chown/cp/sed: ... Permission denied" and restart-loops.
+    # It is empty everywhere else (Windows, macOS, Ubuntu, ...).
     volumes:
-      - ./config/searxng:/etc/searxng:rw
+      - ./config/searxng:/etc/searxng:rw${SEARXNG_MOUNT_OPTS:-}
     environment:
       - SEARXNG_BASE_URL=http://localhost:${SEARXNG_PORT:-9990}/
       - UWSGI_WORKERS=4
       - UWSGI_THREADS=4
       - SEARXNG_SECRET=${SEARXNG_SECRET}
+      # The image's entrypoint chowns the mounted config folder to its own
+      # "searxng" user unless this is "false". Rootless Podman would turn the
+      # host files into a sub-UID you cannot edit or delete, so the installer
+      # sets "false" there; it stays "true" (the image default) otherwise.
+      - FORCE_OWNERSHIP=${SEARXNG_FORCE_OWNERSHIP:-true}
     restart: unless-stopped
     cap_drop:
       - ALL
@@ -72,7 +91,10 @@ services:
       - BULL_AUTH_KEY=${BULL_AUTH_KEY}
       - LOGGING_LEVEL=${LOGGING_LEVEL:-info}
       - BLOCK_MEDIA=false
-      - ALLOW_LOCAL_WEBHOOKS=false
+      # Firecrawl's SSRF guard refuses private/reserved addresses, but proxy and VPN tools (Clash
+      # fake-IP, WARP, ...) hand those out for public sites, so every scrape would fail. This stack
+      # is localhost-only: the guard is off here and in playwright-service.
+      - ALLOW_LOCAL_WEBHOOKS=true
       - SEARXNG_ENDPOINT=http://searxng:8080
       - POSTGRES_HOST=nuq-postgres
       - POSTGRES_PORT=5432
@@ -99,15 +121,16 @@ services:
         max-size: "10m"
         max-file: "3"
         compress: "true"
+    # NOTE: playwright-service / browserless are deliberately NOT listed here.
+    # They are profile-gated (only one of them runs), and podman-compose crashes
+    # with "KeyError: 'browserless'" when a service depends on one that its
+    # profile disabled. Docker only ever honoured that dependency as start
+    # ORDER (service_started + required: false, never readiness), and Firecrawl
+    # reaches the browser service per scrape request, not at start-up, so
+    # nothing is lost. Keep profile-gated services out of every depends_on.
     depends_on:
       redis:
         condition: service_started
-      playwright-service:
-        condition: service_started
-        required: false
-      browserless:
-        condition: service_started
-        required: false
       searxng:
         condition: service_started
       nuq-postgres:
@@ -130,7 +153,7 @@ services:
     environment:
       - PORT=3000
       - BLOCK_MEDIA=false
-      - ALLOW_LOCAL_WEBHOOKS=false
+      - ALLOW_LOCAL_WEBHOOKS=true
       - MAX_CONCURRENT_PAGES=10
     restart: unless-stopped
     networks:
@@ -163,7 +186,7 @@ services:
   # Redis — Firecrawl queue / rate-limiting store.
   # --------------------------------------------------------------------------
   redis:
-    image: redis:alpine
+    image: docker.io/library/redis:alpine
     container_name: local-search-redis
     volumes:
       - redis-data:/data
@@ -175,7 +198,7 @@ services:
   # RabbitMQ — message broker used by Firecrawl's job workers.
   # --------------------------------------------------------------------------
   rabbitmq:
-    image: rabbitmq:3-management
+    image: docker.io/library/rabbitmq:3-management
     container_name: local-search-rabbitmq
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-firecrawl}

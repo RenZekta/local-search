@@ -5,22 +5,19 @@
 set -u
 cd "$(dirname "$0")" || exit 1
 
-if ! command -v docker >/dev/null 2>&1; then
-  echo "[ERROR] Docker is not installed." >&2; exit 1
-fi
-if ! docker info >/dev/null 2>&1; then
-  echo "[ERROR] Docker engine is not running. Start Docker first." >&2; exit 1
-fi
-if docker compose version >/dev/null 2>&1; then DC="docker compose"
-elif command -v docker-compose >/dev/null 2>&1; then DC="docker-compose"
-else echo "[ERROR] Docker Compose not found." >&2; exit 1; fi
+[ -f "./engine.sh" ] || {
+  echo "[ERROR] engine.sh is missing from this folder. Re-run install-local-search.sh." >&2; exit 1; }
+# shellcheck source=engine.sh
+. ./engine.sh
+ls_pause_on_exit
+ls_require_engine running
 
 if [ ! -f ".env" ]; then
   echo "[ERROR] No .env file found. Run install-local-search.sh first." >&2
   exit 1
 fi
 
-echo "Updating Local Search..."
+echo "Updating Local Search (using $ENGINE_NAME)..."
 echo
 echo "[1/3] Pulling latest images..."
 $DC pull || echo "[WARNING] Some images failed to pull. Continuing."
@@ -28,6 +25,9 @@ $DC pull || echo "[WARNING] Some images failed to pull. Continuing."
 echo
 echo "[2/3] Recreating containers with updated images (data is preserved)..."
 $DC up -d || { echo "[ERROR] Failed to recreate containers." >&2; exit 1; }
+SEARXNG_PORT="$(ls_env_value .env SEARXNG_PORT)"; SEARXNG_PORT="${SEARXNG_PORT:-9990}"
+ls_verify_searxng "$SEARXNG_PORT"; VERIFY_RC=$?
+if [ "$VERIFY_RC" -eq 0 ]; then ls_fix_container_proxy "$SEARXNG_PORT"; VERIFY_RC=$?; fi
 
 echo
 echo "[3/3] Refreshing the local-web-search agent skill..."
@@ -46,6 +46,10 @@ else
 fi
 
 echo
+if [ "$VERIFY_RC" -ne 0 ]; then
+  echo "Update finished, but SearXNG or the containers' proxy settings need attention - see the details above." >&2
+  exit 1
+fi
 echo "Update complete. Data volumes were preserved."
 echo "  - Port / LLM changes in .env are now applied."
 echo "  - The local-web-search skill was re-synced from this folder."

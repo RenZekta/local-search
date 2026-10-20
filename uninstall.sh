@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
 # Uninstall the Local Search stack.
 #   - stops & removes containers
-#   - removes Docker volumes (Firecrawl job state, redis, rabbitmq, postgres)
+#   - removes container volumes (Firecrawl job state, redis, rabbitmq, postgres)
 #   - removes the local-web-search agent skill (~/.agents/skills/local-web-search)
 #   - optionally deletes the install folder
 set -u
 cd "$(dirname "$0")" || exit 1
 lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }  # bash-3.2 (macOS) safe
 
-if ! command -v docker >/dev/null 2>&1; then
-  echo "[ERROR] Docker is not installed. You can delete this folder manually." >&2
+[ -f "./engine.sh" ] || {
+  echo "[ERROR] engine.sh is missing from this folder. Re-run install-local-search.sh." >&2; exit 1; }
+# shellcheck source=engine.sh
+. ./engine.sh
+ls_pause_on_exit
+if ! ls_select_engine "./.env"; then
+  echo "  You can delete this folder manually." >&2
   exit 1
 fi
-if docker compose version >/dev/null 2>&1; then DC="docker compose"
-elif command -v docker-compose >/dev/null 2>&1; then DC="docker-compose"
-else echo "[ERROR] Docker Compose not found." >&2; exit 1; fi
+ls_select_compose || exit 1
+ls_ensure_podman_socket || echo "  [!] Podman's API socket is not active - if compose fails, run: systemctl --user enable --now podman.socket"
 
 if [ ! -f ".env" ]; then
   echo "[ERROR] No .env file found. Nothing to uninstall." >&2; exit 1
@@ -26,14 +30,14 @@ cat <<'MSG'
 ============================================================
 This will:
   1. Stop and remove all Local Search containers.
-  2. Remove the Docker VOLUMES (Firecrawl job state, redis cache,
+  2. Remove the container VOLUMES (Firecrawl job state, redis cache,
      rabbitmq/postgres data). This deletes all stored data.
   3. Remove the local-web-search agent skill from
      ~/.agents/skills/local-web-search
   4. (Optional) Delete the install folder and all its files.
 
-  Pulled Docker images are NOT removed (use 'docker image prune'
-  to reclaim that disk space separately).
+  Pulled images are NOT removed (use 'podman image prune' or
+  'docker image prune' to reclaim that disk space separately).
 MSG
 echo
 printf "Continue with uninstall? [y/N]: "

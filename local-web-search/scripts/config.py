@@ -8,6 +8,7 @@ Defaults mirror the compose file's ${VAR:-default} fallbacks:
 SearXNG 9990, Firecrawl 9991.
 """
 import os
+import shutil
 import subprocess
 import sys
 
@@ -41,38 +42,72 @@ def _has_compose_file(d):
     )
 
 
-def _docker_labeled_install_dir():
+ENGINES = ("podman", "docker")  # preference order: Podman wins when both exist
+
+
+def installed_engines():
+    """The container engines found on PATH, in preference order."""
+    return [e for e in ENGINES if shutil.which(e)]
+
+
+def engine_choice(install_dir=None):
+    """Which container engine to use: (engine, auto).
+
+    Same rule as engine.sh (the shell scripts):
+      1. LOCAL_SEARCH_ENGINE=podman|docker in the environment (forced),
+      2. LOCAL_SEARCH_ENGINE in the install folder's .env (the installer
+         records its choice there),
+      3. auto-detect: Podman when installed, otherwise Docker.
+    `engine` is 'podman', 'docker' or None (nothing usable installed);
+    `auto` is True when detection picked it, i.e. a fallback to the other
+    engine is acceptable if this one cannot run.
+    """
+    forced = (os.environ.get("LOCAL_SEARCH_ENGINE") or "").strip().lower()
+    want = forced or load_env(install_dir).get("LOCAL_SEARCH_ENGINE", "").strip().lower()
+    if want in ENGINES:
+        if shutil.which(want):
+            return want, False
+        if forced:  # an explicit override must not be silently ignored
+            return None, False
+    found = installed_engines()
+    return (found[0] if found else None), True
+
+
+def _labeled_install_dir():
     """The install folder per the compose label on the containers. Compose
     tags each container with the directory it was started from, so this
-    finds the folder even though the skill itself lives elsewhere. The
-    Docker engine must be running."""
-    try:
-        res = subprocess.run(
-            ["docker", "container", "ls", "-a", "-q",
-             "--filter", "label=com.docker.compose.service=searxng"],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-        ids = res.stdout.split()[:3]
-    except (OSError, FileNotFoundError):
-        return None
-    for cid in ids:
+    finds the folder even though the skill itself lives elsewhere. A
+    container engine (Podman or Docker) must be running."""
+    forced = (os.environ.get("LOCAL_SEARCH_ENGINE") or "").strip().lower()
+    # an explicit LOCAL_SEARCH_ENGINE means "only that engine"
+    for engine in ([forced] if forced in ENGINES and shutil.which(forced) else installed_engines()):
         try:
-            out = subprocess.run(
-                ["docker", "container", "inspect", cid,
-                 "--format",
-                 '{{index .Config.Labels "com.docker.compose.project.working_dir"}}'],
+            res = subprocess.run(
+                [engine, "container", "ls", "-a", "-q",
+                 "--filter", "label=com.docker.compose.service=searxng"],
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            ids = res.stdout.split()[:3]
         except (OSError, FileNotFoundError):
             continue
-        p = out.stdout.strip()
-        if p and os.path.isdir(p):
-            return p
+        for cid in ids:
+            try:
+                out = subprocess.run(
+                    [engine, "container", "inspect", cid,
+                     "--format",
+                     '{{index .Config.Labels "com.docker.compose.project.working_dir"}}'],
+                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            except (OSError, FileNotFoundError):
+                continue
+            p = out.stdout.strip()
+            if p and os.path.isdir(p):
+                return p
     return None
 
 
 def _hinted_install_dir():
     """The install path recorded by the local-search installer when it
     copied this skill (install-dir.txt next to SKILL.md). This works even
-    when the Docker engine is down and the install folder is not in the
+    when the container engine is down and the install folder is not in the
     default location. Returns None when there is no hint file (e.g. the
     skill was installed standalone from the local-web-search repo)."""
     hint_file = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -90,12 +125,12 @@ def find_install_dir():
 
     Looked up in order:
       1. the LOCAL_SEARCH_DIR env var (explicit override),
-      2. the compose label on the containers (engine must be running),
+      2. the compose label on the containers (an engine must be running),
       3. install-dir.txt recorded by the local-search installer,
       4. ~/local-search (the installer's default location).
     """
     for d in (os.environ.get("LOCAL_SEARCH_DIR"),
-              _docker_labeled_install_dir(),
+              _labeled_install_dir(),
               _hinted_install_dir(),
               os.path.expanduser("~/local-search")):
         if d and _has_compose_file(d):
