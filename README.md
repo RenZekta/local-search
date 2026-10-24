@@ -98,23 +98,16 @@ docker compose version # v2 is installed         (Podman: podman compose version
 
 ## Quick start (one-click install)
 
-> **The installer is self-contained.** Every file it needs (`docker-compose.yml`,
-> `config/searxng/settings.yml`, `.env.example`, the bundled `local-web-search` skill,
-> all the run/stop/update/uninstall scripts, this README, and even the *other*
-> platform's installer) is embedded inside it. You can download **just
-> `install-local-search.bat`** (Windows) or **just `install-local-search.sh`**
-> (Linux/macOS) on its own and the installer will still produce a complete,
-> working folder. Downloading the whole `local-search` folder or the zip just
-> makes the install a little faster (it copies files instead of decoding them).
+> **The installer is self-contained.** Every file it needs (`docker-compose.yml`, `config/searxng/settings.yml`, `.env.example`, the bundled `local-web-search` skill, all the run/stop/update/uninstall scripts, this README, and even the *other* platform's installer) is embedded inside it. Download **`install-local-search.bat`** (Windows) or **`install-local-search.sh`** (Linux/macOS) on its own and the installer will produce a complete, working folder and a run the stack.
 
 Run **one** installer for your platform. First it asks which setup you want —
 type **1**, **2** or **3** (or press **Enter** for **1**):
 
-| Choice | Setup | What it does |
-| --- | --- | --- |
-| **1** (default) | Minimal installation | Default folder, SearXNG on `9990`, Firecrawl on `9991`, the Playwright browser engine, no questions at all, no LLM, no Firecrawl account: a true one-click install. |
-| **2** | Minimal + LLM extraction | The same defaults, plus three questions to connect an LLM (base URL, API key, model). |
-| **3** | Full installation | The full six-step setup — install folder, SearXNG port, Firecrawl port, a browser rendering engine (Playwright or Browserless), (optionally) an LLM, and (optionally) a Firecrawl account — with the same defaults offered at each step if you just press **Enter**. |
+| Choice          | Setup                    | What it does                                                                                                                                                                                                                                                         |
+| --------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** (default) | Minimal installation     | Default folder, SearXNG on `9990`, Firecrawl on `9991`, the Playwright browser engine, no questions at all, no LLM, no Firecrawl account: a true one-click install.                                                                                                  |
+| **2**           | Minimal + LLM extraction | The same defaults, plus three questions to connect an LLM (base URL, API key, model).                                                                                                                                                                                |
+| **3**           | Full installation        | The full six-step setup — install folder, SearXNG port, Firecrawl port, a browser rendering engine (Playwright or Browserless), (optionally) an LLM, and (optionally) a Firecrawl account — with the same defaults offered at each step if you just press **Enter**. |
 
 Either way it then generates
 cryptographically-secure credentials, writes your `.env`, **installs the
