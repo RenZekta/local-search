@@ -9,6 +9,12 @@ containers are down), this script automatically starts them (the same logic
 as ensure_stack.py / Run.bat) and retries the scrape once. You do NOT need
 to run ensure_stack.py first — just run the scrape.
 
+When a page fails to load, the script checks the network path to the site
+(DNS + one short TCP connection, see config.diagnose_url) and says plainly
+whether the route is blocked — e.g. a proxy/VPN fake-IP such as 198.18.x.x
+whose traffic is dropped. A blocked route is NOT retried or waited on, and a
+running stack is never restarted over a page that merely timed out.
+
 Prints the page's Markdown to stdout, truncated at --max-chars.
 """
 import json
@@ -65,6 +71,35 @@ def selfheal():
         return False, "self-heal failed unexpectedly: {}".format(e)
 
 
+def error_detail(e):
+    """Firecrawl's own error text from an HTTPError body (JSON message or
+    raw text), or '' — this is where the real reason for a failed scrape is."""
+    try:
+        text = e.read().decode("utf-8", "replace")[:800]
+    except Exception:
+        return ""
+    try:
+        payload = json.loads(text)
+        msg = payload.get("error") or payload.get("message")
+        if isinstance(msg, str) and msg:
+            return msg
+    except Exception:
+        pass
+    return text.strip()
+
+
+def diagnose(url, only_if_blocked=False):
+    """Print the network diagnosis for a page that failed to load (stderr).
+    Returns True when the route to the site is blocked, i.e. retrying the
+    same URL cannot help."""
+    d = config.diagnose_url(url)
+    if d is None:
+        return False
+    if d.blocked or not only_if_blocked:
+        print(d.text, file=sys.stderr)
+    return d.blocked
+
+
 def main() -> int:
     args = sys.argv[1:]
     if not args or args[0].startswith("--"):
@@ -86,13 +121,28 @@ def main() -> int:
     except urllib.error.HTTPError as e:
         # The service ANSWERED (even with an error status) -> it is up;
         # starting containers would not help.
-        print(f"SCRAPE FAILED for {url}: {e}", file=sys.stderr)
+        detail = error_detail(e)
+        print(f"SCRAPE FAILED for {url}: {e}" + (f" - {detail}" if detail else ""),
+              file=sys.stderr)
+        if diagnose(url):
+            return 1
         print("Firecrawl answered with an error status (the stack is running). "
               "Retry once with a different result URL, or inspect the stack "
               "with: cd <install folder> && docker compose logs --tail 50 "
               "firecrawl", file=sys.stderr)
         return 1
     except Exception as e:
+        if config.is_timeout(e) and config.port_listening(ENDPOINT):
+            # The stack ACCEPTS connections; the page just did not load in
+            # time. Restarting the stack and re-running the same scrape
+            # would only wait another full timeout.
+            print(f"SCRAPE FAILED for {url}: Firecrawl did not answer within "
+                  f"{TIMEOUT}s ({e}). The stack is running, so it was not "
+                  "restarted and the scrape was not repeated.", file=sys.stderr)
+            if not diagnose(url):
+                print("Try a different result URL: this page is slow or "
+                      "blocks automated access.", file=sys.stderr)
+            return 1
         # Connection error: the stack is (probably) down -> self-heal once,
         # then retry the scrape.
         print(f"Stack unreachable ({e}) — starting it automatically ...",
@@ -110,6 +160,7 @@ def main() -> int:
         except Exception as e2:
             print(f"SCRAPE FAILED for {url} after the stack was started: {e2}",
                   file=sys.stderr)
+            diagnose(url)
             return 1
 
     payload = data.get("data") or {}
@@ -117,6 +168,7 @@ def main() -> int:
     if not markdown:
         print("SCRAPE RETURNED NO MARKDOWN for", url, file=sys.stderr)
         print(json.dumps(data)[:800], file=sys.stderr)
+        diagnose(url, only_if_blocked=True)
         return 1
 
     if len(markdown) > max_chars:

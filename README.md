@@ -769,6 +769,21 @@ safely overwritten.
 **`docker compose up` fails with a port already in use.**
 Re-run the installer and pick different ports, or stop whatever's using 9990/9991.
 
+**One site always fails or hangs (e.g. `mckinsey.com`) while others work, and the log shows `198.18.x.x`.**
+When a page cannot be loaded, the skill's scripts now run a *Network check* from the
+host (DNS plus one short TCP connection) and print the result. `198.18.0.0/15` is a
+reserved benchmarking range that proxy/VPN tools (Clash, Mihomo, Surge, sing-box, ...)
+hand out in *fake-IP* DNS mode and then relay themselves. If the tool is stopped, its
+TUN / system-wide mode is off, or a rule drops that site, every packet to the fake
+address is silently discarded: the connection times out with 0 bytes, from the host
+and from the containers alike. That is a network-level block, not a temporary site
+error, so the scripts do **not** wait and retry it. Fix the path instead: start the
+tool and enable TUN mode, add the domain to its `fake-ip-filter` (or a DIRECT rule), or
+turn fake-IP DNS off, then run the scrape again. (The stack already disables Firecrawl's
+private-address guard, so fake-IPs are never refused up front; they just have to
+actually be carried.) A page that merely times out while the stack is running no longer
+triggers a pointless stack restart either.
+
 **SearXNG returns `429 Too Many Requests` or blocks requests.**
 You're hitting an external engine's rate limit (not SearXNG itself). Wait a
 minute, or in `config/searxng/settings.yml` remove the offending engine under

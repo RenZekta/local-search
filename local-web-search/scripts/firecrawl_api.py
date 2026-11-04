@@ -10,6 +10,11 @@ adds the same self-healing behaviour as web_search.py / web_scrape.py:
     up -d`) and the request is retried once — only when talking to the LOCAL
     stack, never for a remote FIRECRAWL_API_URL,
   * transient HTTP statuses (429 / 5xx) are retried with a short backoff,
+  * when the LOCAL stack fails to load a page, the network path to that site
+    is checked first (config.diagnose_url): a blocked route (e.g. a proxy/VPN
+    fake-IP 198.18.x.x whose traffic is dropped) is reported as such and is
+    NOT retried, and a running stack is never restarted over a request that
+    merely timed out,
   * every failure is reported as an FcError with a clear, actionable message.
 
 Endpoints: the base URL defaults to the local Firecrawl instance (port from
@@ -185,11 +190,25 @@ def _hint_for_status(status):
                 "FIRECRAWL_API_URL=https://api.firecrawl.dev and "
                 "FIRECRAWL_API_KEY, then retry.")
     if status in RETRY_STATUSES:
-        return ("The Firecrawl service answered with a server error. Wait a "
-                "moment and retry; if it persists, inspect the stack with: "
-                "cd <install folder> && docker compose logs --tail 50 firecrawl "
-                "(or `podman compose logs ...` if the stack runs on Podman)")
+        return ("The Firecrawl service answered with a server error. For a page "
+                "fetch this usually means the target site could not be loaded "
+                "(timeout, blocked route or bot protection) - repeating the same "
+                "request rarely changes that. Read the error above, and inspect "
+                "the stack with: cd <install folder> && docker compose logs "
+                "--tail 50 firecrawl (or `podman compose logs ...` if the stack "
+                "runs on Podman)")
     return None
+
+
+def _target_url(body):
+    """The web page a request asks Firecrawl to load (body 'url', or the first
+    of 'urls'), or None for calls that do not fetch a page (status polls...)."""
+    if not isinstance(body, dict):
+        return None
+    target = body.get("url")
+    if not target and isinstance(body.get("urls"), list) and body["urls"]:
+        target = body["urls"][0]
+    return target if isinstance(target, str) and target.strip() else None
 
 
 def _request(endpoint, method, body_bytes, headers, timeout):
@@ -230,6 +249,17 @@ def call(path, method="GET", body=None, query=None, timeout=TIMEOUT):
     if body is not None:
         body_bytes = json.dumps(body).encode("utf-8")
 
+    # A page the LOCAL stack is asked to load. When that fails, the network
+    # path to the site is checked (once per call) so a blocked route is
+    # reported as such instead of being waited on and retried.
+    site = _target_url(body) if is_local() else None
+    diag_box = []
+
+    def site_diagnosis():
+        if not diag_box:
+            diag_box.append(config.diagnose_url(site) if site else None)
+        return diag_box[0]
+
     attempts = 1 + len(RETRY_BACKOFF)  # initial + retries
     for attempt in range(1, attempts + 1):
         # ---- one attempt, classifying every failure mode -----------------
@@ -238,16 +268,24 @@ def call(path, method="GET", body=None, query=None, timeout=TIMEOUT):
         except urllib.error.HTTPError as e:
             status = e.code
             detail = _read_body(e)
-            if status in RETRY_STATUSES and attempt < attempts:
+            diag = site_diagnosis() if (site and (status >= 500 or status == 408)) else None
+            blocked = bool(diag and diag.blocked)
+            if status in RETRY_STATUSES and attempt < attempts and not blocked:
                 wait = RETRY_BACKOFF[attempt - 1]
                 print(f"Firecrawl answered {status} ({detail or 'server error'}) "
                       f"— retrying in {wait}s ...", file=sys.stderr)
                 time.sleep(wait)
                 continue
+            if blocked:
+                hint = diag.text
+            elif diag:
+                hint = diag.text + "\n" + (_hint_for_status(status) or "")
+            else:
+                hint = _hint_for_status(status)
             raise FcError("HTTP {}{}{}".format(
                 status, ": " + detail if detail else "",
                 "" if attempt == 1 else f" (after {attempt} attempts)"),
-                status=status, hint=_hint_for_status(status)) from e
+                status=status, hint=hint.strip() if hint else None) from e
         except FcError:
             raise
         except Exception as e:  # URLError / ConnectionError / timeout: DOWN
@@ -255,6 +293,16 @@ def call(path, method="GET", body=None, query=None, timeout=TIMEOUT):
                 raise FcError(
                     "could not reach {} ({}). Check the URL and your "
                     "network, then retry.".format(base_url(), e)) from e
+            if config.is_timeout(e) and config.port_listening(base_url()):
+                # The stack ACCEPTS connections: it is up, the page just did
+                # not load in time. Restarting it and repeating the request
+                # would only wait another full timeout.
+                diag = site_diagnosis()
+                raise FcError(
+                    "no answer from Firecrawl within {}s ({}). The stack is "
+                    "running, so it was not restarted and the request was not "
+                    "repeated.".format(timeout, e),
+                    hint=diag.text if diag else None) from e
             if attempt < attempts:
                 # Local stack: try to bring it up, then retry the request.
                 print(f"Stack unreachable ({e}) — starting it automatically ...",

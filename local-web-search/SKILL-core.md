@@ -117,6 +117,13 @@ into the install folder's `.env` for you and installs the extra scripts).
 ## If something goes wrong
 
 - Retry **once** with a different query or URL before giving up.
+- If a script prints a **Network check** saying the route to a site is
+  blocked (e.g. the site's name resolves to a proxy/VPN fake-IP such as
+  `198.18.x.x` and nothing answers), do not retry that URL and do not wait:
+  the connection is blocked at the network level, so repeating it only
+  wastes time. Use a different source for the information (another URL, e.g.
+  from a fresh search, with this same skill), and tell the user what the check
+  reported so they can fix their network (proxy/VPN TUN mode, DNS).
 - Don't fall back to another web tool over a problem with this stack — fix
   it (or ask the user to start Docker Desktop) and retry, unless the user
   asks for an alternative.
