@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Publish / refresh the GitHub Release for the version in ./VERSION.
+# Publish / refresh the GitHub Release for the version in .github/VERSION.
 #
 #   * No release for vX.Y yet           -> create tag + release (auto notes),
 #                                          attach the 4 installer files.
@@ -12,7 +12,7 @@
 # Needs: git, gh (preinstalled on GitHub runners), GH_TOKEN with contents:write.
 set -euo pipefail
 
-VERSION_FILE="${VERSION_FILE:-VERSION}"
+VERSION_FILE="${VERSION_FILE:-.github/VERSION}"
 SHA="${GITHUB_SHA:-$(git rev-parse HEAD)}"
 ASSETS=(
   install-local-search.sh

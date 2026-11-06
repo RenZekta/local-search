@@ -856,8 +856,8 @@ that unpack the complete build/test environment in one shot: the
 local-search source tree, `gen_installers.py` / `gen_rig.py`, every test
 script, and `BUILD.md`.
 
-1. **Unpack the rig** into a fresh folder (default:
-   `<rig folder>\local-search-dev`):
+1. **Run a packer** — `local-search-rig.bat` (Windows) or
+   `local-search-rig.sh` (Linux/macOS):
 
    ```bat
    full-dev-rig\local-search-rig.bat
@@ -867,11 +867,39 @@ script, and `BUILD.md`.
    ./full-dev-rig/local-search-rig.sh
    ```
 
-   Answers: target folder (Enter = default), `y` = build right away,
-   `y` = confirm. Unpacking runs `gen_installers.py` in the target folder
-   when you answered `y`.
+   The first prompt is **Target folder**:
 
-2. **Regenerate everything** inside the unpacked folder:
+   | You type | What happens |
+   |---|---|
+   | a folder path, or just **Enter** (default: `<rig folder>\local-search-dev`) | Unpacks the rig there. Then `y` = build the installers right away, `y` = confirm. |
+   | **1** | **Updates the repo automatically** (see step 2). |
+
+   Numbered answers are reserved for actions; only the exact text `1` is
+   special, so a folder such as `1abc` or `C:\...` still means "unpack there".
+
+2. **Update the repo automatically** — run the packer from the repo's
+   `full-dev-rig/` folder and answer **1**. The repo is detected (the folder
+   above `full-dev-rig/` that contains `.git`), so nothing else is asked; run
+   a packer from anywhere else and it asks for the repo folder and a
+   confirmation first. It then:
+
+   1. builds everything in a temp folder first (installers, then fresh
+      packers) — if the build fails, the repo is left untouched;
+   2. replaces the two packers in `full-dev-rig/` (never the one that is
+      running);
+   3. deletes everything in the repo except `.git`, `.github` and
+      `full-dev-rig`;
+   4. copies the freshly built `local-search/` files (dotfiles included) into
+      the repo root;
+   5. marks every `*.sh` as executable in git (`100755`, staged with
+      `git add --chmod=+x`) — the bit is otherwise lost whenever files pass
+      through Windows;
+   6. removes the temp folder and shows `git status`.
+
+   Nothing is committed or pushed, and `.github/VERSION` is preserved — bump it
+   yourself when you want a new release. Needs Python 3.8+.
+
+3. **Regenerate everything** inside the unpacked folder:
 
    ```sh
    python gen_installers.py   # rebuild install-local-search.bat/.sh

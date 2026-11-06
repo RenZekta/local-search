@@ -2002,8 +2002,8 @@ that unpack the complete build/test environment in one shot: the
 local-search source tree, `gen_installers.py` / `gen_rig.py`, every test
 script, and `BUILD.md`.
 
-1. **Unpack the rig** into a fresh folder (default:
-   `<rig folder>\local-search-dev`):
+1. **Run a packer** — `local-search-rig.bat` (Windows) or
+   `local-search-rig.sh` (Linux/macOS):
 
    ```bat
    full-dev-rig\local-search-rig.bat
@@ -2013,11 +2013,39 @@ script, and `BUILD.md`.
    ./full-dev-rig/local-search-rig.sh
    ```
 
-   Answers: target folder (Enter = default), `y` = build right away,
-   `y` = confirm. Unpacking runs `gen_installers.py` in the target folder
-   when you answered `y`.
+   The first prompt is **Target folder**:
 
-2. **Regenerate everything** inside the unpacked folder:
+   | You type | What happens |
+   |---|---|
+   | a folder path, or just **Enter** (default: `<rig folder>\local-search-dev`) | Unpacks the rig there. Then `y` = build the installers right away, `y` = confirm. |
+   | **1** | **Updates the repo automatically** (see step 2). |
+
+   Numbered answers are reserved for actions; only the exact text `1` is
+   special, so a folder such as `1abc` or `C:\...` still means "unpack there".
+
+2. **Update the repo automatically** — run the packer from the repo's
+   `full-dev-rig/` folder and answer **1**. The repo is detected (the folder
+   above `full-dev-rig/` that contains `.git`), so nothing else is asked; run
+   a packer from anywhere else and it asks for the repo folder and a
+   confirmation first. It then:
+
+   1. builds everything in a temp folder first (installers, then fresh
+      packers) — if the build fails, the repo is left untouched;
+   2. replaces the two packers in `full-dev-rig/` (never the one that is
+      running);
+   3. deletes everything in the repo except `.git`, `.github` and
+      `full-dev-rig`;
+   4. copies the freshly built `local-search/` files (dotfiles included) into
+      the repo root;
+   5. marks every `*.sh` as executable in git (`100755`, staged with
+      `git add --chmod=+x`) — the bit is otherwise lost whenever files pass
+      through Windows;
+   6. removes the temp folder and shows `git status`.
+
+   Nothing is committed or pushed, and `.github/VERSION` is preserved — bump it
+   yourself when you want a new release. Needs Python 3.8+.
+
+3. **Regenerate everything** inside the unpacked folder:
 
    ```sh
    python gen_installers.py   # rebuild install-local-search.bat/.sh
@@ -9563,55 +9591,80 @@ if "!NEED_B64!"=="1" (
   >> "!B64TMP!" echo b2NhbC1zZWFyY2gtcmlnLnNoYCAoTGludXgvbWFjT1MpIOKAlAp0aGF0IHVucGFjayB0aGUgY29t
   >> "!B64TMP!" echo cGxldGUgYnVpbGQvdGVzdCBlbnZpcm9ubWVudCBpbiBvbmUgc2hvdDogdGhlCmxvY2FsLXNlYXJj
   >> "!B64TMP!" echo aCBzb3VyY2UgdHJlZSwgYGdlbl9pbnN0YWxsZXJzLnB5YCAvIGBnZW5fcmlnLnB5YCwgZXZlcnkg
-  >> "!B64TMP!" echo dGVzdApzY3JpcHQsIGFuZCBgQlVJTEQubWRgLgoKMS4gKipVbnBhY2sgdGhlIHJpZyoqIGludG8g
-  >> "!B64TMP!" echo YSBmcmVzaCBmb2xkZXIgKGRlZmF1bHQ6CiAgIGA8cmlnIGZvbGRlcj5cbG9jYWwtc2VhcmNoLWRl
-  >> "!B64TMP!" echo dmApOgoKICAgYGBgYmF0CiAgIGZ1bGwtZGV2LXJpZ1xsb2NhbC1zZWFyY2gtcmlnLmJhdAogICBg
-  >> "!B64TMP!" echo YGAKCiAgIGBgYHNoCiAgIC4vZnVsbC1kZXYtcmlnL2xvY2FsLXNlYXJjaC1yaWcuc2gKICAgYGBg
-  >> "!B64TMP!" echo CgogICBBbnN3ZXJzOiB0YXJnZXQgZm9sZGVyIChFbnRlciA9IGRlZmF1bHQpLCBgeWAgPSBidWls
-  >> "!B64TMP!" echo ZCByaWdodCBhd2F5LAogICBgeWAgPSBjb25maXJtLiBVbnBhY2tpbmcgcnVucyBgZ2VuX2luc3Rh
-  >> "!B64TMP!" echo bGxlcnMucHlgIGluIHRoZSB0YXJnZXQgZm9sZGVyCiAgIHdoZW4geW91IGFuc3dlcmVkIGB5YC4K
-  >> "!B64TMP!" echo CjIuICoqUmVnZW5lcmF0ZSBldmVyeXRoaW5nKiogaW5zaWRlIHRoZSB1bnBhY2tlZCBmb2xkZXI6
-  >> "!B64TMP!" echo CgogICBgYGBzaAogICBweXRob24gZ2VuX2luc3RhbGxlcnMucHkgICAjIHJlYnVpbGQgaW5zdGFs
-  >> "!B64TMP!" echo bC1sb2NhbC1zZWFyY2guYmF0Ly5zaAogICBweXRob24gZ2VuX3JpZy5weSAgICAgICAgICAjIHJl
-  >> "!B64TMP!" echo YnVpbGQgdGhlIHR3byBwYWNrZXJzIGJ5dGUtZm9yLWJ5dGUKICAgYGBgCgogICBGcmVzaCBpbnN0
-  >> "!B64TMP!" echo YWxsZXJzIGFyZSB3cml0dGVuIHRvIGA8dGFyZ2V0Plxsb2NhbC1zZWFyY2hcYCwgYW5kIGZyZXNo
-  >> "!B64TMP!" echo CiAgIHBhY2tlcnMgcmVwbGFjZSB0aGUgdW5wYWNrZWQgYGxvY2FsLXNlYXJjaC1yaWcuKmAgY29w
-  >> "!B64TMP!" echo aWVzLiBgQlVJTEQubWRgCiAgIChpbnNpZGUgdGhlIHVucGFja2VkIGZvbGRlcikgZG9jdW1lbnRz
-  >> "!B64TMP!" echo IHRoZSB0ZXN0IHNjcmlwdHMKICAgKGB0ZXN0X2I2NC5weWAsIGB0ZXN0X3JpZy5weWAsIGBlMmVf
-  >> "!B64TMP!" echo dGVzdC5zaGAsIC4uLikuCgpOb3RlOiB0aGUgcGFja2VycyBlbWJlZCB0aGUgc291cmNlIHRyZWUg
-  >> "!B64TMP!" echo KiphcyBvZiB3aGVuIHRoZXkgd2VyZQpnZW5lcmF0ZWQqKi4gTWFrZSBzb3VyY2UgZWRpdHMgZmly
-  >> "!B64TMP!" echo c3QsIG9yIGNvcHkgdGhlIGVkaXRlZCBmaWxlcyBpbnRvIHRoZQp1bnBhY2tlZCBgbG9jYWwtc2Vh
-  >> "!B64TMP!" echo cmNoL2AgZm9sZGVyLCBiZWZvcmUgcnVubmluZyB0aGUgZ2VuZXJhdG9ycy4KCiMjIFNlY3VyaXR5
-  >> "!B64TMP!" echo IG5vdGVzCgotIFRoaXMgc3RhY2sgaXMgZGVzaWduZWQgZm9yICoqbG9jYWwgLyB0cnVzdGVkLW5l
-  >> "!B64TMP!" echo dHdvcmsgdXNlKiouIEZpcmVjcmF3bCdzIEFQSSBpcwogICoqdW5hdXRoZW50aWNhdGVkKiogKGBV
-  >> "!B64TMP!" echo U0VfREJfQVVUSEVOVElDQVRJT049ZmFsc2VgKSBzbyB5b3VyIG1vZGVscyBjYW4gY2FsbCBpdAog
-  >> "!B64TMP!" echo IHdpdGhvdXQgYSBrZXkuICoqRG8gbm90IGV4cG9zZSBwb3J0cyA5OTkwLzk5OTEgdG8gdGhlIHB1
-  >> "!B64TMP!" echo YmxpYyBpbnRlcm5ldC4qKgotIEFsbCBjcmVkZW50aWFscyAoYFNFQVJYTkdfU0VDUkVUYCwgYEJV
-  >> "!B64TMP!" echo TExfQVVUSF9LRVlgLCBgUE9TVEdSRVNfUEFTU1dPUkRgLAogIGBSQUJCSVRNUV9QQVNTV09SRGAs
-  >> "!B64TMP!" echo IGBCUk9XU0VSTEVTU19UT0tFTmApIGFyZSBnZW5lcmF0ZWQgYXMgMjU2LWJpdCByYW5kb20gaGV4
-  >> "!B64TMP!" echo CiAgYXQgaW5zdGFsbCB0aW1lIGFuZCBzdG9yZWQgb25seSBpbiB5b3VyIGxvY2FsIGAuZW52YC4K
-  >> "!B64TMP!" echo LSBTZWFyWE5HJ3MgYm90IGxpbWl0ZXIgaXMgZGlzYWJsZWQgYW5kIEpTT04gb3V0cHV0IGlzIGVu
-  >> "!B64TMP!" echo YWJsZWQgc28gbW9kZWxzIGNhbgogIHF1ZXJ5IGl0IOKAlCB0aGlzIGlzIGludGVudGlvbmFsIGZv
-  >> "!B64TMP!" echo ciBsb2NhbCB1c2UuIE9uIGEgcHVibGljIGluc3RhbmNlIHlvdSdkIHdhbnQKICB0aGUgbGltaXRl
-  >> "!B64TMP!" echo ciBiYWNrIG9uLgotIFlvdXIgc2VhcmNoIHF1ZXJpZXMgYW5kIHNjcmFwZWQgcGFnZSBjb250ZW50
-  >> "!B64TMP!" echo cyBuZXZlciBsZWF2ZSB5b3VyIG1hY2hpbmUKICAoZXhjZXB0IHRoZSBvdXRib3VuZCBmZXRjaGVz
-  >> "!B64TMP!" echo IFNlYXJYTkcvRmlyZWNyYXdsIG1ha2UgdG8gdGhlIHB1YmxpYyB3ZWIsIHdoaWNoCiAgaXMgdGhl
-  >> "!B64TMP!" echo IHdob2xlIHBvaW50KS4KCi0tLQoKIyMgQ3JlZGl0cyAmIGxpY2Vuc2VzCgpUaGlzIHByb2plY3Qg
-  >> "!B64TMP!" echo aXMgbGljZW5zZWQgdW5kZXIgdGhlICoqTVBMLTIuMCoqIGxpY2Vuc2Ug4oCUIHNlZSBbTElDRU5T
-  >> "!B64TMP!" echo RV0oTElDRU5TRSkKKGl0IGNvdmVycyB0aGUgYnVuZGxlZCBbbG9jYWwtd2ViLXNlYXJjaF0obG9j
-  >> "!B64TMP!" echo YWwtd2ViLXNlYXJjaCkgc2tpbGwgdG9vKS4KCi0gWyoqU2VhclhORyoqXShodHRwczovL2dpdGh1
-  >> "!B64TMP!" echo Yi5jb20vc2VhcnhuZy9zZWFyeG5nKSDigJQgQUdQTC0zLjAsIHByaXZhY3ktcmVzcGVjdGluZyBt
-  >> "!B64TMP!" echo ZXRhc2VhcmNoIGVuZ2luZS4KLSBbKipGaXJlY3Jhd2wqKl0oaHR0cHM6Ly9naXRodWIuY29tL2Zp
-  >> "!B64TMP!" echo cmVjcmF3bC9maXJlY3Jhd2wpIOKAlCBBR1BMLTMuMCwgdGhlIGNvbnRleHQgQVBJIGZvciB3ZWIg
-  >> "!B64TMP!" echo c2NyYXBpbmcvY3Jhd2xpbmcvc2VhcmNoLgotIFsqKkZpcmVjcmF3bCBNQ1Agc2VydmVyKipdKGh0
-  >> "!B64TMP!" echo dHBzOi8vZ2l0aHViLmNvbS9maXJlY3Jhd2wvZmlyZWNyYXdsLW1jcC1zZXJ2ZXIpIOKAlCBNSVQu
-  >> "!B64TMP!" echo Ci0gVGhlIHVwc3RyZWFtIHByb2plY3RzIHJldGFpbiB0aGVpciBvd24gbGljZW5zZXMg4oCUIHBs
-  >> "!B64TMP!" echo ZWFzZSByZXNwZWN0IHRoZW0uCiAgTm90aGluZyBmcm9tIHRoZW0gaXMgYnVuZGxlZCBpbiB0aGlz
-  >> "!B64TMP!" echo IHJlcG9zaXRvcnk7IHRoZSBpbnN0YWxsZXIgb25seSBwdWxscwogIHRoZWlyIG9mZmljaWFsIGNv
-  >> "!B64TMP!" echo bnRhaW5lciBpbWFnZXMgYXQgaW5zdGFsbCB0aW1lLgoKLS0tCgo8c3ViPkJ1aWx0IHNvIGFueSBs
-  >> "!B64TMP!" echo b2NhbCBtb2RlbCDigJQgaW4gTE0gU3R1ZGlvIG9yIG90aGVyd2lzZSDigJQgY2FuIHNlYXJjaCBh
-  >> "!B64TMP!" echo bmQgcmVhZAp0aGUgd2ViIHdpdGhvdXQgYSBwYWlkIEFQSSBrZXkuIENvbnRyaWJ1dGlvbnMgd2Vs
-  >> "!B64TMP!" echo Y29tZS48L3N1Yj4K
+  >> "!B64TMP!" echo dGVzdApzY3JpcHQsIGFuZCBgQlVJTEQubWRgLgoKMS4gKipSdW4gYSBwYWNrZXIqKiDigJQgYGxv
+  >> "!B64TMP!" echo Y2FsLXNlYXJjaC1yaWcuYmF0YCAoV2luZG93cykgb3IKICAgYGxvY2FsLXNlYXJjaC1yaWcuc2hg
+  >> "!B64TMP!" echo IChMaW51eC9tYWNPUyk6CgogICBgYGBiYXQKICAgZnVsbC1kZXYtcmlnXGxvY2FsLXNlYXJjaC1y
+  >> "!B64TMP!" echo aWcuYmF0CiAgIGBgYAoKICAgYGBgc2gKICAgLi9mdWxsLWRldi1yaWcvbG9jYWwtc2VhcmNoLXJp
+  >> "!B64TMP!" echo Zy5zaAogICBgYGAKCiAgIFRoZSBmaXJzdCBwcm9tcHQgaXMgKipUYXJnZXQgZm9sZGVyKio6Cgog
+  >> "!B64TMP!" echo ICB8IFlvdSB0eXBlIHwgV2hhdCBoYXBwZW5zIHwKICAgfC0tLXwtLS18CiAgIHwgYSBmb2xkZXIg
+  >> "!B64TMP!" echo cGF0aCwgb3IganVzdCAqKkVudGVyKiogKGRlZmF1bHQ6IGA8cmlnIGZvbGRlcj5cbG9jYWwtc2Vh
+  >> "!B64TMP!" echo cmNoLWRldmApIHwgVW5wYWNrcyB0aGUgcmlnIHRoZXJlLiBUaGVuIGB5YCA9IGJ1aWxkIHRoZSBp
+  >> "!B64TMP!" echo bnN0YWxsZXJzIHJpZ2h0IGF3YXksIGB5YCA9IGNvbmZpcm0uIHwKICAgfCAqKjEqKiB8ICoqVXBk
+  >> "!B64TMP!" echo YXRlcyB0aGUgcmVwbyBhdXRvbWF0aWNhbGx5KiogKHNlZSBzdGVwIDIpLiB8CgogICBOdW1iZXJl
+  >> "!B64TMP!" echo ZCBhbnN3ZXJzIGFyZSByZXNlcnZlZCBmb3IgYWN0aW9uczsgb25seSB0aGUgZXhhY3QgdGV4dCBg
+  >> "!B64TMP!" echo MWAgaXMKICAgc3BlY2lhbCwgc28gYSBmb2xkZXIgc3VjaCBhcyBgMWFiY2Agb3IgYEM6XC4uLmAg
+  >> "!B64TMP!" echo c3RpbGwgbWVhbnMgInVucGFjayB0aGVyZSIuCgoyLiAqKlVwZGF0ZSB0aGUgcmVwbyBhdXRvbWF0
+  >> "!B64TMP!" echo aWNhbGx5Kiog4oCUIHJ1biB0aGUgcGFja2VyIGZyb20gdGhlIHJlcG8ncwogICBgZnVsbC1kZXYt
+  >> "!B64TMP!" echo cmlnL2AgZm9sZGVyIGFuZCBhbnN3ZXIgKioxKiouIFRoZSByZXBvIGlzIGRldGVjdGVkICh0aGUg
+  >> "!B64TMP!" echo Zm9sZGVyCiAgIGFib3ZlIGBmdWxsLWRldi1yaWcvYCB0aGF0IGNvbnRhaW5zIGAuZ2l0YCksIHNv
+  >> "!B64TMP!" echo IG5vdGhpbmcgZWxzZSBpcyBhc2tlZDsgcnVuCiAgIGEgcGFja2VyIGZyb20gYW55d2hlcmUgZWxz
+  >> "!B64TMP!" echo ZSBhbmQgaXQgYXNrcyBmb3IgdGhlIHJlcG8gZm9sZGVyIGFuZCBhCiAgIGNvbmZpcm1hdGlvbiBm
+  >> "!B64TMP!" echo aXJzdC4gSXQgdGhlbjoKCiAgIDEuIGJ1aWxkcyBldmVyeXRoaW5nIGluIGEgdGVtcCBmb2xkZXIg
+  >> "!B64TMP!" echo Zmlyc3QgKGluc3RhbGxlcnMsIHRoZW4gZnJlc2gKICAgICAgcGFja2Vycykg4oCUIGlmIHRoZSBi
+  >> "!B64TMP!" echo dWlsZCBmYWlscywgdGhlIHJlcG8gaXMgbGVmdCB1bnRvdWNoZWQ7CiAgIDIuIHJlcGxhY2VzIHRo
+  >> "!B64TMP!" echo ZSB0d28gcGFja2VycyBpbiBgZnVsbC1kZXYtcmlnL2AgKG5ldmVyIHRoZSBvbmUgdGhhdCBpcwog
+  >> "!B64TMP!" echo ICAgICBydW5uaW5nKTsKICAgMy4gZGVsZXRlcyBldmVyeXRoaW5nIGluIHRoZSByZXBvIGV4Y2Vw
+  >> "!B64TMP!" echo dCBgLmdpdGAsIGAuZ2l0aHViYCBhbmQKICAgICAgYGZ1bGwtZGV2LXJpZ2A7CiAgIDQuIGNvcGll
+  >> "!B64TMP!" echo cyB0aGUgZnJlc2hseSBidWlsdCBgbG9jYWwtc2VhcmNoL2AgZmlsZXMgKGRvdGZpbGVzIGluY2x1
+  >> "!B64TMP!" echo ZGVkKSBpbnRvCiAgICAgIHRoZSByZXBvIHJvb3Q7CiAgIDUuIG1hcmtzIGV2ZXJ5IGAqLnNoYCBh
+  >> "!B64TMP!" echo cyBleGVjdXRhYmxlIGluIGdpdCAoYDEwMDc1NWAsIHN0YWdlZCB3aXRoCiAgICAgIGBnaXQgYWRk
+  >> "!B64TMP!" echo IC0tY2htb2Q9K3hgKSDigJQgdGhlIGJpdCBpcyBvdGhlcndpc2UgbG9zdCB3aGVuZXZlciBmaWxl
+  >> "!B64TMP!" echo cyBwYXNzCiAgICAgIHRocm91Z2ggV2luZG93czsKICAgNi4gcmVtb3ZlcyB0aGUgdGVtcCBmb2xk
+  >> "!B64TMP!" echo ZXIgYW5kIHNob3dzIGBnaXQgc3RhdHVzYC4KCiAgIE5vdGhpbmcgaXMgY29tbWl0dGVkIG9yIHB1
+  >> "!B64TMP!" echo c2hlZCwgYW5kIGAuZ2l0aHViL1ZFUlNJT05gIGlzIHByZXNlcnZlZCDigJQgYnVtcCBpdAogICB5
+  >> "!B64TMP!" echo b3Vyc2VsZiB3aGVuIHlvdSB3YW50IGEgbmV3IHJlbGVhc2UuIE5lZWRzIFB5dGhvbiAzLjgrLgoK
+  >> "!B64TMP!" echo My4gKipSZWdlbmVyYXRlIGV2ZXJ5dGhpbmcqKiBpbnNpZGUgdGhlIHVucGFja2VkIGZvbGRlcjoK
+  >> "!B64TMP!" echo CiAgIGBgYHNoCiAgIHB5dGhvbiBnZW5faW5zdGFsbGVycy5weSAgICMgcmVidWlsZCBpbnN0YWxs
+  >> "!B64TMP!" echo LWxvY2FsLXNlYXJjaC5iYXQvLnNoCiAgIHB5dGhvbiBnZW5fcmlnLnB5ICAgICAgICAgICMgcmVi
+  >> "!B64TMP!" echo dWlsZCB0aGUgdHdvIHBhY2tlcnMgYnl0ZS1mb3ItYnl0ZQogICBgYGAKCiAgIEZyZXNoIGluc3Rh
+  >> "!B64TMP!" echo bGxlcnMgYXJlIHdyaXR0ZW4gdG8gYDx0YXJnZXQ+XGxvY2FsLXNlYXJjaFxgLCBhbmQgZnJlc2gK
+  >> "!B64TMP!" echo ICAgcGFja2VycyByZXBsYWNlIHRoZSB1bnBhY2tlZCBgbG9jYWwtc2VhcmNoLXJpZy4qYCBjb3Bp
+  >> "!B64TMP!" echo ZXMuIGBCVUlMRC5tZGAKICAgKGluc2lkZSB0aGUgdW5wYWNrZWQgZm9sZGVyKSBkb2N1bWVudHMg
+  >> "!B64TMP!" echo dGhlIHRlc3Qgc2NyaXB0cwogICAoYHRlc3RfYjY0LnB5YCwgYHRlc3RfcmlnLnB5YCwgYGUyZV90
+  >> "!B64TMP!" echo ZXN0LnNoYCwgLi4uKS4KCk5vdGU6IHRoZSBwYWNrZXJzIGVtYmVkIHRoZSBzb3VyY2UgdHJlZSAq
+  >> "!B64TMP!" echo KmFzIG9mIHdoZW4gdGhleSB3ZXJlCmdlbmVyYXRlZCoqLiBNYWtlIHNvdXJjZSBlZGl0cyBmaXJz
+  >> "!B64TMP!" echo dCwgb3IgY29weSB0aGUgZWRpdGVkIGZpbGVzIGludG8gdGhlCnVucGFja2VkIGBsb2NhbC1zZWFy
+  >> "!B64TMP!" echo Y2gvYCBmb2xkZXIsIGJlZm9yZSBydW5uaW5nIHRoZSBnZW5lcmF0b3JzLgoKIyMgU2VjdXJpdHkg
+  >> "!B64TMP!" echo bm90ZXMKCi0gVGhpcyBzdGFjayBpcyBkZXNpZ25lZCBmb3IgKipsb2NhbCAvIHRydXN0ZWQtbmV0
+  >> "!B64TMP!" echo d29yayB1c2UqKi4gRmlyZWNyYXdsJ3MgQVBJIGlzCiAgKip1bmF1dGhlbnRpY2F0ZWQqKiAoYFVT
+  >> "!B64TMP!" echo RV9EQl9BVVRIRU5USUNBVElPTj1mYWxzZWApIHNvIHlvdXIgbW9kZWxzIGNhbiBjYWxsIGl0CiAg
+  >> "!B64TMP!" echo d2l0aG91dCBhIGtleS4gKipEbyBub3QgZXhwb3NlIHBvcnRzIDk5OTAvOTk5MSB0byB0aGUgcHVi
+  >> "!B64TMP!" echo bGljIGludGVybmV0LioqCi0gQWxsIGNyZWRlbnRpYWxzIChgU0VBUlhOR19TRUNSRVRgLCBgQlVM
+  >> "!B64TMP!" echo TF9BVVRIX0tFWWAsIGBQT1NUR1JFU19QQVNTV09SRGAsCiAgYFJBQkJJVE1RX1BBU1NXT1JEYCwg
+  >> "!B64TMP!" echo YEJST1dTRVJMRVNTX1RPS0VOYCkgYXJlIGdlbmVyYXRlZCBhcyAyNTYtYml0IHJhbmRvbSBoZXgK
+  >> "!B64TMP!" echo ICBhdCBpbnN0YWxsIHRpbWUgYW5kIHN0b3JlZCBvbmx5IGluIHlvdXIgbG9jYWwgYC5lbnZgLgot
+  >> "!B64TMP!" echo IFNlYXJYTkcncyBib3QgbGltaXRlciBpcyBkaXNhYmxlZCBhbmQgSlNPTiBvdXRwdXQgaXMgZW5h
+  >> "!B64TMP!" echo YmxlZCBzbyBtb2RlbHMgY2FuCiAgcXVlcnkgaXQg4oCUIHRoaXMgaXMgaW50ZW50aW9uYWwgZm9y
+  >> "!B64TMP!" echo IGxvY2FsIHVzZS4gT24gYSBwdWJsaWMgaW5zdGFuY2UgeW91J2Qgd2FudAogIHRoZSBsaW1pdGVy
+  >> "!B64TMP!" echo IGJhY2sgb24uCi0gWW91ciBzZWFyY2ggcXVlcmllcyBhbmQgc2NyYXBlZCBwYWdlIGNvbnRlbnRz
+  >> "!B64TMP!" echo IG5ldmVyIGxlYXZlIHlvdXIgbWFjaGluZQogIChleGNlcHQgdGhlIG91dGJvdW5kIGZldGNoZXMg
+  >> "!B64TMP!" echo U2VhclhORy9GaXJlY3Jhd2wgbWFrZSB0byB0aGUgcHVibGljIHdlYiwgd2hpY2gKICBpcyB0aGUg
+  >> "!B64TMP!" echo d2hvbGUgcG9pbnQpLgoKLS0tCgojIyBDcmVkaXRzICYgbGljZW5zZXMKClRoaXMgcHJvamVjdCBp
+  >> "!B64TMP!" echo cyBsaWNlbnNlZCB1bmRlciB0aGUgKipNUEwtMi4wKiogbGljZW5zZSDigJQgc2VlIFtMSUNFTlNF
+  >> "!B64TMP!" echo XShMSUNFTlNFKQooaXQgY292ZXJzIHRoZSBidW5kbGVkIFtsb2NhbC13ZWItc2VhcmNoXShsb2Nh
+  >> "!B64TMP!" echo bC13ZWItc2VhcmNoKSBza2lsbCB0b28pLgoKLSBbKipTZWFyWE5HKipdKGh0dHBzOi8vZ2l0aHVi
+  >> "!B64TMP!" echo LmNvbS9zZWFyeG5nL3NlYXJ4bmcpIOKAlCBBR1BMLTMuMCwgcHJpdmFjeS1yZXNwZWN0aW5nIG1l
+  >> "!B64TMP!" echo dGFzZWFyY2ggZW5naW5lLgotIFsqKkZpcmVjcmF3bCoqXShodHRwczovL2dpdGh1Yi5jb20vZmly
+  >> "!B64TMP!" echo ZWNyYXdsL2ZpcmVjcmF3bCkg4oCUIEFHUEwtMy4wLCB0aGUgY29udGV4dCBBUEkgZm9yIHdlYiBz
+  >> "!B64TMP!" echo Y3JhcGluZy9jcmF3bGluZy9zZWFyY2guCi0gWyoqRmlyZWNyYXdsIE1DUCBzZXJ2ZXIqKl0oaHR0
+  >> "!B64TMP!" echo cHM6Ly9naXRodWIuY29tL2ZpcmVjcmF3bC9maXJlY3Jhd2wtbWNwLXNlcnZlcikg4oCUIE1JVC4K
+  >> "!B64TMP!" echo LSBUaGUgdXBzdHJlYW0gcHJvamVjdHMgcmV0YWluIHRoZWlyIG93biBsaWNlbnNlcyDigJQgcGxl
+  >> "!B64TMP!" echo YXNlIHJlc3BlY3QgdGhlbS4KICBOb3RoaW5nIGZyb20gdGhlbSBpcyBidW5kbGVkIGluIHRoaXMg
+  >> "!B64TMP!" echo cmVwb3NpdG9yeTsgdGhlIGluc3RhbGxlciBvbmx5IHB1bGxzCiAgdGhlaXIgb2ZmaWNpYWwgY29u
+  >> "!B64TMP!" echo dGFpbmVyIGltYWdlcyBhdCBpbnN0YWxsIHRpbWUuCgotLS0KCjxzdWI+QnVpbHQgc28gYW55IGxv
+  >> "!B64TMP!" echo Y2FsIG1vZGVsIOKAlCBpbiBMTSBTdHVkaW8gb3Igb3RoZXJ3aXNlIOKAlCBjYW4gc2VhcmNoIGFu
+  >> "!B64TMP!" echo ZCByZWFkCnRoZSB3ZWIgd2l0aG91dCBhIHBhaWQgQVBJIGtleS4gQ29udHJpYnV0aW9ucyB3ZWxj
+  >> "!B64TMP!" echo b21lLjwvc3ViPgo=
   set "LS_B64_IN=!B64TMP!"
   set "LS_B64_OUT=!TARGET!\README.md"
   call :decode_b64

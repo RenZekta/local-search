@@ -1,13 +1,13 @@
 name: Release
 
-# Fully automatic releases, driven by the VERSION file in the repo root.
+# Fully automatic releases, driven by the .github/VERSION file.
 #
-#   New version   Edit VERSION (e.g. 1.4 -> 1.5) and push to main.
+#   New version   Edit .github/VERSION (e.g. 1.4 -> 1.5) and push to main.
 #                 A new tag v1.5 + GitHub Release is created with auto-generated
 #                 notes (same as "Generate release notes" in the UI) and the 4
 #                 installer files attached.
 #
-#   Same version  Push changes to main without touching VERSION. If the
+#   Same version  Push changes to main without touching .github/VERSION. If the
 #                 committed installers differ from the ones on the release,
 #                 they are replaced and the tag v1.5 is moved to the new commit.
 #                 If they are identical, nothing happens.
