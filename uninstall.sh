@@ -44,6 +44,18 @@ printf "Continue with uninstall? [y/N]: "
 read -r CONFIRM
 if [ "$(lower "$CONFIRM")" != "y" ]; then echo "Uninstall cancelled."; exit 0; fi
 
+# The containers can only be removed while the engine answers: start it if it is
+# down (deleting the folder without this would orphan containers and volumes).
+if ! ls_ensure_running; then
+  ls_err "The $ENGINE_NAME engine is not running and could not be started automatically."
+  ls_engine_hint
+  echo "  Nothing was removed. Start the engine and run this again," >&2
+  echo "  or delete this folder manually (containers and volumes would stay behind)." >&2
+  exit 1
+fi
+ls_select_compose || exit 1   # the engine may have changed to Docker
+ls_ensure_podman_socket || echo "  [!] Podman's API socket is not active - if compose fails, run: systemctl --user enable --now podman.socket"
+
 echo
 echo "Stopping and removing containers + volumes..."
 $DC down -v --remove-orphans || echo "[WARNING] docker compose down reported errors."
