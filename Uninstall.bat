@@ -47,6 +47,19 @@ if /i not "!CONFIRM!"=="y" ( echo Uninstall cancelled. & pause & exit /b 0 )
 REM  All prompts are answered - safe to switch to UTF-8 for the output phase.
 chcp 65001 >nul
 
+REM  The containers can only be removed while the engine answers: start Docker
+REM  Desktop if it is down (deleting the folder anyway would orphan them).
+docker info >nul 2>&1
+if not errorlevel 1 goto docker_ready
+call :start_docker
+if errorlevel 1 (
+  echo   Nothing was removed. Start Docker Desktop and run this again, or delete
+  echo   this folder manually ^(the containers and volumes would stay behind^).
+  pause
+  exit /b 1
+)
+:docker_ready
+
 echo.
 echo Stopping and removing containers + volumes...
 docker compose down -v --remove-orphans
@@ -56,7 +69,7 @@ if errorlevel 1 (
   echo   You may need to remove leftover containers manually, e.g.:
   echo     docker rm -f local-search-firecrawl local-search-searxng
   echo     docker rm -f local-search-redis local-search-rabbitmq
-  echo     docker rm -f local-search-postgres local-search-playwright local-search-browserless
+  echo     docker rm -f local-search-postgres local-search-playwright local-search-browserless local-search-invisible
 )
 
 echo.
@@ -93,3 +106,41 @@ echo Uninstall complete. Goodbye!
 echo.
 pause
 exit /b 0
+
+:start_docker
+REM  Launches Docker Desktop and waits (LOCAL_SEARCH_DOCKER_TIMEOUT s, default 300)
+REM  until "docker info" answers. exit /b 0 = engine online, 1 = could not start it.
+REM  Same block in Run.bat, Update.bat and Uninstall.bat - keep them identical.
+echo [NOTE] The Docker engine is not running - trying to start Docker Desktop...
+set "DD_EXE="
+if exist "%ProgramFiles%\Docker\Docker\Docker Desktop.exe" set "DD_EXE=%ProgramFiles%\Docker\Docker\Docker Desktop.exe"
+if not defined DD_EXE if exist "%ProgramFiles(x86)%\Docker\Docker\Docker Desktop.exe" set "DD_EXE=%ProgramFiles(x86)%\Docker\Docker\Docker Desktop.exe"
+if not defined DD_EXE if exist "%LOCALAPPDATA%\Programs\Docker Desktop\Docker Desktop.exe" set "DD_EXE=%LOCALAPPDATA%\Programs\Docker Desktop\Docker Desktop.exe"
+if not defined DD_EXE (
+  echo [ERROR] Docker Desktop was not found in the usual install locations.
+  echo   Start Docker yourself, wait until it says "running", then run this again.
+  exit /b 1
+)
+set "DD_TIMEOUT=300"
+if defined LOCAL_SEARCH_DOCKER_TIMEOUT set "DD_TIMEOUT=!LOCAL_SEARCH_DOCKER_TIMEOUT!"
+echo     Launching: "!DD_EXE!"
+start "" "!DD_EXE!"
+echo     Waiting for the Docker engine to come online - up to !DD_TIMEOUT! seconds...
+set /a DD_WAIT=0
+:start_docker_wait
+timeout /t 5 /nobreak >nul 2>&1
+if errorlevel 1 ping -n 6 127.0.0.1 >nul 2>&1
+set /a DD_WAIT+=5
+docker info >nul 2>&1
+if not errorlevel 1 (
+  echo [OK] Docker engine is online after !DD_WAIT!s.
+  exit /b 0
+)
+if !DD_WAIT! geq !DD_TIMEOUT! (
+  echo [ERROR] The Docker engine did not come online within !DD_TIMEOUT! seconds.
+  echo   Check Docker Desktop for errors, wait until it says "running", then run this again.
+  exit /b 1
+)
+set /a "DD_MOD=DD_WAIT %% 15"
+if !DD_MOD! equ 0 echo     ... still waiting !DD_WAIT!s
+goto start_docker_wait

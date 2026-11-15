@@ -10,14 +10,16 @@
 #    firecrawl           scrape/crawl/search/map API  -> host ${FIRECRAWL_PORT}
 #    playwright-service  JS rendering for Firecrawl (profile: playwright)
 #    browserless         stealth JS rendering for Firecrawl (profile: browserless)
+#    invisible-playwright  patched-Firefox rendering for Firecrawl, built locally
+#                          from ./invisible-playwright (profile: invisible)
 #    redis               queue for Firecrawl
 #    rabbitmq            message broker for Firecrawl
 #    nuq-postgres        job state DB for Firecrawl
 #
-#  Only ONE of playwright-service / browserless actually starts: the
-#  installer's "Browser rendering engine" question writes COMPOSE_PROFILES
-#  to .env (default "playwright") to pick which one, and points
-#  PLAYWRIGHT_MICROSERVICE_URL at it. The other stays defined but dormant.
+#  Only ONE of playwright-service / browserless / invisible-playwright actually
+#  starts: the installer's "Browser rendering engine" question writes
+#  COMPOSE_PROFILES to .env (default "playwright") to pick which one, and points
+#  PLAYWRIGHT_MICROSERVICE_URL at it. The others stay defined but dormant.
 #
 #  Only the two host ports below are published. Everything else stays on the
 #  private "local-search-net" bridge network.
@@ -121,7 +123,7 @@ services:
         max-size: "10m"
         max-file: "3"
         compress: "true"
-    # NOTE: playwright-service / browserless are deliberately NOT listed here.
+    # NOTE: playwright-service / browserless / invisible-playwright are deliberately NOT listed here.
     # They are profile-gated (only one of them runs), and podman-compose crashes
     # with "KeyError: 'browserless'" when a service depends on one that its
     # profile disabled. Docker only ever honoured that dependency as start
@@ -178,6 +180,41 @@ services:
       - DEFAULT_STEALTH=true
       - CONCURRENT=10
       - MAX_CONCURRENT_SESSIONS=10
+    restart: unless-stopped
+    networks:
+      - local-search-net
+
+  # --------------------------------------------------------------------------
+  # Invisible Playwright (https://github.com/oss-invisible/playwright) - a
+  # patched Firefox whose fingerprint (navigator, screen, WebGL, fonts, timezone,
+  # ...) is generated inside the engine, not injected through JavaScript, behind
+  # the same two HTTP routes as Firecrawl's playwright-service. There is no
+  # published image: it is BUILT locally from ./invisible-playwright on the first
+  # start (about 10 minutes and ~2 GB: base image + Python + the ~260 MB engine).
+  # Only starts when COMPOSE_PROFILES=invisible (the installer's "Invisible
+  # Playwright" answer). Optional tuning (all in .env): INVISIBLE_GITHUB_TOKEN
+  # (build), INVISIBLE_PROXY_*, INVISIBLE_BLOCK_ADS.
+  # --------------------------------------------------------------------------
+  invisible-playwright:
+    build:
+      context: ./invisible-playwright
+      args:
+        - STEALTHFOX_GITHUB_TOKEN=${INVISIBLE_GITHUB_TOKEN:-}
+    container_name: local-search-invisible
+    profiles: ["invisible"]
+    environment:
+      - PORT=3000
+      - BLOCK_MEDIA=false
+      - BLOCK_ADS=${INVISIBLE_BLOCK_ADS:-false}
+      - ALLOW_LOCAL_WEBHOOKS=true
+      - MAX_CONCURRENT_PAGES=${INVISIBLE_MAX_PAGES:-4}
+      - PROXY_SERVER=${INVISIBLE_PROXY_SERVER:-}
+      - PROXY_USERNAME=${INVISIBLE_PROXY_USERNAME:-}
+      - PROXY_PASSWORD=${INVISIBLE_PROXY_PASSWORD:-}
+    # Firefox keeps shared memory for every open page; Docker's 64 MB default
+    # crashes tabs on heavy pages.
+    shm_size: "2gb"
+    init: true
     restart: unless-stopped
     networks:
       - local-search-net

@@ -55,7 +55,8 @@ together:
 | **searxng** | `searxng/searxng:latest` | Metasearch engine with **JSON output enabled** and the rate-limiter **disabled**, so models can query it programmatically. |
 | **firecrawl** | `ghcr.io/firecrawl/firecrawl:latest` | The scraping/crawling/search API. Runs with `USE_DB_AUTHENTICATION=false` → **no API key needed** for local use. |
 | **playwright-service** *(default engine)* | `ghcr.io/firecrawl/playwright-service:latest` | Headless Chromium for JavaScript-rendered pages — the classic Firecrawl engine. Starts when the installer's Step 4 answer is Playwright (the default). |
-| **browserless** *(alternate engine)* | `ghcr.io/browserless/chromium:latest` | Stealth headless Chromium (Browserless CE, `DEFAULT_STEALTH=true`) for JavaScript-rendered pages; better at avoiding Cloudflare-style bot checks. Starts instead of Playwright when Step 4 is answered **y**. |
+| **browserless** *(alternate engine)* | `ghcr.io/browserless/chromium:latest` | Stealth headless Chromium (Browserless CE, `DEFAULT_STEALTH=true`) for JavaScript-rendered pages; better at avoiding Cloudflare-style bot checks. Starts instead of Playwright when Step 4 is answered **2** (or **y**). |
+| **invisible-playwright** *(alternate engine)* | built locally from [`invisible-playwright/`](invisible-playwright/) — no published image | A patched **Firefox** ([oss-invisible/playwright](https://github.com/oss-invisible/playwright)) whose fingerprint (navigator, screen, WebGL, fonts, timezone, …) is generated inside the engine rather than injected through JavaScript, behind the same `POST /scrape` + `GET /health` routes as Firecrawl's own service. Starts instead of Playwright when Step 4 is answered **3**. **The first start builds the image: ~10 minutes, ~2 GB**, and needs GitHub, PyPI and Microsoft's registry. |
 | **redis** | `redis:alpine` | Firecrawl job queue. |
 | **rabbitmq** | `rabbitmq:3-management` | Firecrawl message broker. |
 | **nuq-postgres** | `ghcr.io/firecrawl/nuq-postgres:latest` | Firecrawl job-state DB (pg_cron enabled). |
@@ -82,7 +83,7 @@ Firecrawl call can both search *and* fetch full page content.
   - Linux, Podman (Fedora / RHEL / Debian / Ubuntu): `sudo dnf install podman docker-compose` (Debian/Ubuntu: `sudo apt install podman docker-compose-v2`). Both compose providers work — Compose v2 (`docker-compose`) and `podman-compose` (tested with 1.6.0). Rootless is fine.
   - **If both Podman and Docker are installed, the Linux/macOS installer uses Podman.** Force the other one with `LOCAL_SEARCH_ENGINE=docker ./install-local-search.sh`. The installer records its choice in `.env` (`LOCAL_SEARCH_ENGINE`) so `run.sh` / `update.sh` keep using the same engine. The Windows installer uses Docker Desktop.
 - **~5 GB free disk** for images and data.
-- **8 GB RAM / 4 CPU cores** recommended (Firecrawl plus its browser engine — Playwright or Browserless — is the heavy part; reduce resource limits in `docker-compose.yml` for smaller hosts).
+- **8 GB RAM / 4 CPU cores** recommended (Firecrawl plus its browser engine — Playwright, Browserless or Invisible Playwright — is the heavy part; reduce resource limits in `docker-compose.yml` for smaller hosts).
 - **Python 3.8+** for the bundled local-web-search skill scripts (optional but recommended — it's the easiest way to use the stack).
 - *(Optional, for Firecrawl AI features)* **LM Studio** or any OpenAI-compatible endpoint, local or remote — see [section D](#d-connect-an-llm-lm-studio-etc).
 - *(Optional, for MCP)* **Node.js 18+** so `npx firecrawl-mcp` works.
@@ -107,7 +108,7 @@ type **1**, **2** or **3** (or press **Enter** for **1**):
 | --------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **1** (default) | Minimal installation     | Default folder, SearXNG on `9990`, Firecrawl on `9991`, the Playwright browser engine, no questions at all, no LLM, no Firecrawl account: a true one-click install.                                                                                                  |
 | **2**           | Minimal + LLM extraction | The same defaults, plus three questions to connect an LLM (base URL, API key, model).                                                                                                                                                                                |
-| **3**           | Full installation        | The full six-step setup — install folder, SearXNG port, Firecrawl port, a browser rendering engine (Playwright or Browserless), (optionally) an LLM, and (optionally) a Firecrawl account — with the same defaults offered at each step if you just press **Enter**. |
+| **3**           | Full installation        | The full six-step setup — install folder, SearXNG port, Firecrawl port, a browser rendering engine (Playwright, Browserless or Invisible Playwright), (optionally) an LLM, and (optionally) a Firecrawl account — with the same defaults offered at each step if you just press **Enter**. |
 
 Either way it then generates
 cryptographically-secure credentials, writes your `.env`, **installs the
@@ -119,6 +120,13 @@ local-web-search skill**, pulls the images, and starts the stack.
 > 5 minutes for the engine while you answer the prompts. (Override the wait with
 > the `LOCAL_SEARCH_DOCKER_TIMEOUT` env var, in seconds.) Rootless Podman on
 > Linux has no daemon to start.
+>
+> The same goes for **`run.sh` / `Run.bat`**, **`update.sh` / `Update.bat`** and
+> **`uninstall.sh` / `Uninstall.bat`**: if the engine is down they launch it and wait
+> (same `LOCAL_SEARCH_DOCKER_TIMEOUT`) instead of asking you to start it. The
+> uninstaller asks its confirmation question first and only then starts the engine;
+> if the engine cannot be started it removes nothing. `stop` does not start anything
+> (a stopped engine has no containers to stop).
 
 ### Windows
 
@@ -148,7 +156,7 @@ API key, model), then installs. **3** walks through the full setup:
 --- Step 3 of 6: Firecrawl port (default 9991) ----
   Port for Firecrawl [press Enter for 9991]: 9991
 --- Step 4 of 6: Browser rendering engine (default: Playwright) ---
-  Use Browserless instead of Playwright? [y/N]:         # default: Playwright, see below
+  Engine [1=Playwright, 2=Browserless, 3=Invisible; Enter=1]:   # default: Playwright, see below
 --- Step 5 of 6: LLM (optional) -------------------
   Connect LLM now? [y/N]:                               # default: no, see section D
 --- Step 6 of 6: Firecrawl account (optional) -----
@@ -192,15 +200,35 @@ SearXNG's config folder is mounted (see `SEARXNG_MOUNT_OPTS` /
 > mention them. See [section D](#d-connect-an-llm-lm-studio-etc).
 
 > **The browser rendering engine (Step 4).** Firecrawl needs a headless
-> browser to fetch JS-rendered pages. The default answer, **N**, keeps
-> **Playwright** — the classic Firecrawl engine (`ghcr.io/firecrawl/playwright-service`).
-> Answering **y** switches to **Browserless** (`ghcr.io/browserless/chromium`)
-> instead, run in its built-in stealth mode, which masks common automation
-> fingerprints (e.g. `navigator.webdriver`) and tends to get blocked less
-> often by Cloudflare-style bot checks. Only the engine you pick is actually
-> started — the installer writes `COMPOSE_PROFILES` and
+> browser to fetch JS-rendered pages. The default answer, **1** (or just
+> Enter), keeps **Playwright** — the classic Firecrawl engine
+> (`ghcr.io/firecrawl/playwright-service`). **2** (or **y**) switches to
+> **Browserless** (`ghcr.io/browserless/chromium`) instead, run in its built-in
+> stealth mode, which masks common automation fingerprints (e.g.
+> `navigator.webdriver`) and tends to get blocked less often by
+> Cloudflare-style bot checks. **3** switches to **Invisible Playwright**, a
+> patched Firefox whose fingerprint is generated inside the browser itself
+> (see [below](#invisible-playwright-engine)). Only the engine you pick is
+> actually started — the installer writes `COMPOSE_PROFILES` and
 > `PLAYWRIGHT_MICROSERVICE_URL` to `.env` accordingly. To switch later, edit
-> those two lines in `.env` and run `Update.bat` / `./update.sh`.
+> those two lines in `.env` (`invisible` / `http://invisible-playwright:3000/scrape`
+> for the third engine) and run `Update.bat` / `./update.sh`.
+>
+> <a id="invisible-playwright-engine"></a>**Invisible Playwright engine.** There
+> is no published image for it, so the installer **builds** it from
+> [`invisible-playwright/`](invisible-playwright/) on the first start: about
+> 10 minutes and ~2 GB (Microsoft's Playwright base image, Python 3.11+ via
+> `uv`, and the ~260 MB engine), which needs access to `mcr.microsoft.com`,
+> `ghcr.io`, PyPI and GitHub. If GitHub rate-limits that download, put a token
+> (no scopes needed) in `.env` as `INVISIBLE_GITHUB_TOKEN` and re-run
+> `Update.bat` / `./update.sh`. The service speaks Firecrawl's two routes
+> (`POST /scrape`, `GET /health`), runs Firefox on a virtual display
+> (`headless=True` on Linux means a real windowed Firefox on Xvfb) and needs
+> `shm_size: 2gb`, which `docker-compose.yml` sets. A full Firefox is
+> heavier than the other two, so it renders 4 pages at a time by default
+> (`INVISIBLE_MAX_PAGES`). `Update.bat` / `./update.sh` rebuild it without the
+> cache to pick up a newer engine. The engine is MIT / Apache-2.0 licensed; see
+> its repository for details.
 
 > **The optional Firecrawl account (Step 6).** A few of the bundled skill's
 > tools — the research agent, live-page `interact`, file `parse`, monitors,
@@ -213,7 +241,8 @@ SearXNG's config folder is mounted (see `SEARXNG_MOUNT_OPTS` /
 > by re-running the installer and answering differently.
 
 > **First run downloads ~3–4 GB of Docker images** (Playwright's and Browserless's
-> images each bundle a full Chromium, so only the one you picked is pulled).
+> images each bundle a full Chromium, so only the one you picked is pulled;
+> Invisible Playwright is built locally instead — see Step 4).
 > Subsequent starts are a few seconds.
 
 When it finishes you'll see:
@@ -275,7 +304,7 @@ http://localhost:9990            http://localhost:9991
    │                                     │
    └─────── private docker network ──────┘
                  local-search-net
-   also on it: playwright-service OR browserless (whichever you picked in Step 4), redis, rabbitmq, nuq-postgres
+   also on it: playwright-service, browserless OR invisible-playwright (whichever you picked in Step 4), redis, rabbitmq, nuq-postgres
 ```
 
 Four key wiring decisions the installer makes for you:
@@ -286,8 +315,8 @@ Four key wiring decisions the installer makes for you:
 2. **Firecrawl → SearXNG** — the Firecrawl container sets
    `SEARXNG_ENDPOINT=http://searxng:8080`, so Firecrawl's `/v1/search` uses your
    local SearXNG instead of needing a third-party search provider.
-3. **Firecrawl → browser engine** — `docker-compose.yml` defines both
-   `playwright-service` and `browserless` behind Compose profiles; `.env`'s
+3. **Firecrawl → browser engine** — `docker-compose.yml` defines
+   `playwright-service`, `browserless` and `invisible-playwright` behind Compose profiles; `.env`'s
    `COMPOSE_PROFILES` (set by Step 4) enables just one, and
    `PLAYWRIGHT_MICROSERVICE_URL` points Firecrawl at it.
 4. **local-web-search skill auto-install** — the installer copies the bundled skill to
@@ -690,9 +719,13 @@ installer; documented in `.env.example`). Edit it, then run `Update.bat` /
 | `BULL_AUTH_KEY` | *(random)* | Protects the (disabled-by-default) Firecrawl queue admin UI. |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | `firecrawl` / `firecrawl` / *(random)* | Firecrawl job-state DB credentials. |
 | `RABBITMQ_USER` / `RABBITMQ_PASSWORD` | `firecrawl` / *(random)* | Firecrawl message-broker credentials. |
-| `COMPOSE_PROFILES` | `playwright` | Which browser engine actually starts: `playwright` or `browserless` (installer Step 4). |
-| `PLAYWRIGHT_MICROSERVICE_URL` | `http://playwright-service:3000/scrape` | Firecrawl's URL for its browser engine — must match `COMPOSE_PROFILES` (`http://browserless:3000/scrape` when that's `browserless`). |
+| `COMPOSE_PROFILES` | `playwright` | Which browser engine actually starts: `playwright`, `browserless` or `invisible` (installer Step 4). |
+| `PLAYWRIGHT_MICROSERVICE_URL` | `http://playwright-service:3000/scrape` | Firecrawl's URL for its browser engine — must match `COMPOSE_PROFILES` (`http://browserless:3000/scrape` when that's `browserless`, `http://invisible-playwright:3000/scrape` when it's `invisible`). |
 | `BROWSERLESS_TOKEN` | *(random)* | Auth token for the Browserless service. Only used when `COMPOSE_PROFILES=browserless`; harmless if unused. |
+| `INVISIBLE_GITHUB_TOKEN` | *(empty)* | Optional GitHub token (no scopes) used only while **building** the Invisible Playwright image, to avoid GitHub's anonymous rate limit. Build arguments are visible in `docker history` of that local image. |
+| `INVISIBLE_PROXY_SERVER` / `_USERNAME` / `_PASSWORD` | *(empty)* | Optional upstream proxy for the Invisible Playwright engine. With a proxy set, the engine derives its timezone and language from the proxy's exit IP. |
+| `INVISIBLE_MAX_PAGES` | `4` | Pages the Invisible Playwright engine renders at once (Firefox is heavy). |
+| `INVISIBLE_BLOCK_ADS` | `false` | `true` makes the Invisible Playwright engine drop requests to a short list of ad/tracker hosts. |
 | `LOGGING_LEVEL` | `info` | Firecrawl log verbosity (`debug`/`info`/`warn`/`error`). |
 | `OPENAI_BASE_URL` | *(unset)* | OpenAI-compatible LLM endpoint for `/v1/extract` + summaries. For a same-host server use `http://host.docker.internal:<port>/v1`. |
 | `OPENAI_API_KEY` | *(unset)* | Any non-empty string (most local servers ignore it). |
@@ -940,6 +973,7 @@ This project is licensed under the **MPL-2.0** license — see [LICENSE](LICENSE
 - [**SearXNG**](https://github.com/searxng/searxng) — AGPL-3.0, privacy-respecting metasearch engine.
 - [**Firecrawl**](https://github.com/firecrawl/firecrawl) — AGPL-3.0, the context API for web scraping/crawling/search.
 - [**Firecrawl MCP server**](https://github.com/firecrawl/firecrawl-mcp-server) — MIT.
+- [**Invisible Playwright**](https://github.com/oss-invisible/playwright) — MIT / Apache-2.0 (optional third browser engine, built locally; the Firefox it patches keeps its own licenses).
 - The upstream projects retain their own licenses — please respect them.
   Nothing from them is bundled in this repository; the installer only pulls
   their official container images at install time.

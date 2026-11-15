@@ -21,6 +21,14 @@ echo "Updating Local Search (using $ENGINE_NAME)..."
 echo
 echo "[1/3] Pulling latest images..."
 $DC pull || echo "[WARNING] Some images failed to pull. Continuing."
+# The Invisible Playwright engine has no published image: it is built from
+# ./invisible-playwright. Rebuild it without the cache so a newer engine is picked up.
+case "$(ls_env_value .env COMPOSE_PROFILES)" in
+  *invisible*)
+    echo "      Rebuilding the Invisible Playwright engine (fresh download, ~10 min)..."
+    $DC build --pull --no-cache invisible-playwright \
+      || echo "[WARNING] The engine rebuild failed. Keeping the existing engine image." ;;
+esac
 
 echo
 echo "[2/3] Recreating containers with updated images (data is preserved)..."

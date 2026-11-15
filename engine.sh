@@ -17,6 +17,7 @@
 #    ls_select_engine [ENVFILE]  sets ENGINE (podman|docker), ENGINE_NAME, ENGINE_AUTO
 #    ls_engine_running           0 when the selected engine answers
 #    ls_start_engine             best-effort launch of a stopped engine
+#    ls_ensure_running           engine answers, or start it and wait (then Docker fallback); 0/1
 #    ls_fallback_engine          auto-picked Podman unusable + Docker running -> Docker
 #    ls_engine_hint              prints "how to start it yourself" help
 #    ls_select_compose           sets DC (e.g. "podman compose", "docker compose")
@@ -143,6 +144,41 @@ ls_start_engine() {
          && sudo -n service docker start >/dev/null 2>&1; then
       return 0
     fi
+  fi
+  return 1
+}
+
+# Make sure the selected engine answers. If it does not: launch it (when it can
+# be launched), wait for it to come online (LOCAL_SEARCH_DOCKER_TIMEOUT seconds,
+# default 300), and as a last resort use Docker when Podman was only auto-picked.
+# Returns 0 when an engine is ready (ENGINE / ENGINE_NAME may have changed to
+# Docker - select the compose tool AFTER calling this), 1 when none could be
+# brought up. Prints what it is doing; the caller prints the final error.
+ls_ensure_running() {
+  local timeout="${LOCAL_SEARCH_DOCKER_TIMEOUT:-300}" poll="${LS_ENGINE_POLL:-5}" waited=0
+  [ "$poll" -ge 1 ] 2>/dev/null || poll=5
+  [ "$timeout" -ge 1 ] 2>/dev/null || timeout=300
+  ls_engine_running && return 0
+  ls_say "  [!] The $ENGINE_NAME engine is not running - trying to start it..."
+  if ls_start_engine; then
+    ls_say "  Launched $ENGINE_NAME in the background - waiting up to ${timeout}s for it to come online..."
+    while ! ls_engine_running; do
+      sleep "$poll"
+      waited=$((waited + poll))
+      if [ "$waited" -ge "$timeout" ]; then
+        ls_err "The $ENGINE_NAME engine did not come online within ${timeout}s."
+        break
+      fi
+      if [ $((waited % 15)) -lt "$poll" ]; then ls_say "  ... still waiting, ${waited}s elapsed"; fi
+    done
+    if ls_engine_running; then
+      ls_ok "$ENGINE_NAME engine is online after ${waited}s."
+      return 0
+    fi
+  fi
+  if ls_fallback_engine; then
+    ls_say "  [!] Podman is not responding - using Docker instead."
+    return 0
   fi
   return 1
 }
@@ -347,7 +383,7 @@ ls_override_write() {
     echo "# Proxy variables copied from the host shell point at 127.0.0.1, which inside a container is"
     echo "# the container itself: blanked for every service that needs the internet."
     echo "services:"
-    for svc in searxng firecrawl playwright-service browserless; do
+    for svc in searxng firecrawl playwright-service browserless invisible-playwright; do
       echo "  $svc:"
       echo "    environment:"
       for v in $LS_OVR_PROXY; do
@@ -401,7 +437,7 @@ ls_fix_container_proxy() {
   ls_say "   the container itself, so every outgoing request fails at once - searches stay empty.)"
   if [ -f "$LS_OVERRIDE" ] && ! ls_override_is_ours; then
     ls_say "  $LS_OVERRIDE exists and is not ours, so I will not change it. Add to the 'environment:' of"
-    ls_say "  searxng, firecrawl, playwright-service and browserless, set to empty:"
+    ls_say "  searxng, firecrawl, playwright-service, browserless and invisible-playwright, set to empty:"
     ls_say "    http_proxy=   https_proxy=   all_proxy=   (and the UPPERCASE twins)"
     return 1
   fi
@@ -432,14 +468,10 @@ EOF
 # For run.sh / stop.sh / update.sh / uninstall.sh (cwd = the install folder).
 ls_require_engine() {
   ls_select_engine "./.env" || exit 1
-  if [ "${1:-}" = "running" ] && ! ls_engine_running; then
-    if ls_fallback_engine; then
-      ls_say "  [!] Podman is not responding - using Docker instead."
-    else
-      ls_err "The $ENGINE_NAME engine is not running. Start it first."
-      ls_engine_hint
-      exit 1
-    fi
+  if [ "${1:-}" = "running" ] && ! ls_ensure_running; then
+    ls_err "The $ENGINE_NAME engine is not running and could not be started automatically."
+    ls_engine_hint
+    exit 1
   fi
   ls_select_compose || exit 1
   ls_ensure_podman_socket || ls_say "  [!] Podman's API socket is not active - if compose fails, run: systemctl --user enable --now podman.socket"
